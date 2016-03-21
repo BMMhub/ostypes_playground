@@ -27,25 +27,27 @@ core.os.mname = core.os.toolkit.indexOf('gtk') == 0 ? 'gtk' : core.os.name; // m
 
 var BOOTSTRAP = this;
 
-switch (core.os.mname) {
-    case 'winnt':
-    case 'winmo':
-    case 'wince':
-		console.log('loading:', core.addon.path.modules + 'ostypes/ostypes_win.jsm');
-        Services.scriptloader.loadSubScript(core.addon.path.modules + 'ostypes/ostypes_win.jsm', BOOTSTRAP);
-        break
-    case 'gtk':
-        Services.scriptloader.loadSubScript(core.addon.path.modules + 'ostypes/ostypes_x11.jsm', BOOTSTRAP);
-        break;
-    case 'darwin':
-        Services.scriptloader.loadSubScript(core.addon.path.modules + 'ostypes/ostypes_mac.jsm', BOOTSTRAP);
-        break;
-    default:
-        throw new Error('Operating system, "' + OS.Constants.Sys.Name + '" is not supported');
-}
+function initOstypes() {
+	switch (core.os.mname) {
+		case 'winnt':
+		case 'winmo':
+		case 'wince':
+			console.log('loading:', core.addon.path.modules + 'ostypes/ostypes_win.jsm');
+			Services.scriptloader.loadSubScript(core.addon.path.modules + 'ostypes/ostypes_win.jsm', BOOTSTRAP);
+			break
+		case 'gtk':
+			Services.scriptloader.loadSubScript(core.addon.path.modules + 'ostypes/ostypes_x11.jsm', BOOTSTRAP);
+			break;
+		case 'darwin':
+			Services.scriptloader.loadSubScript(core.addon.path.modules + 'ostypes/ostypes_mac.jsm', BOOTSTRAP);
+			break;
+		default:
+			throw new Error('Operating system, "' + OS.Constants.Sys.Name + '" is not supported');
+	}
 
-Services.scriptloader.loadSubScript(core.addon.path.modules + 'ostypes/cutils.jsm', BOOTSTRAP);
-Services.scriptloader.loadSubScript(core.addon.path.modules + 'ostypes/ctypes_math.jsm', BOOTSTRAP);
+	Services.scriptloader.loadSubScript(core.addon.path.modules + 'ostypes/cutils.jsm', BOOTSTRAP);
+	Services.scriptloader.loadSubScript(core.addon.path.modules + 'ostypes/ctypes_math.jsm', BOOTSTRAP);
+}
 
 var OSStuff = {};
 function main() {
@@ -89,6 +91,7 @@ function uninstall() {}
 
 function startup(aData, aReason) {
 	
+	initOstypes();
 	// main();
 	
 }
