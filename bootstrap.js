@@ -9,8 +9,8 @@ var core = {
         name: 'ostypes_playground',
         id: 'ostypes_playground@jetpack',
         path: {
-            content: 'chrome://ostypes_playground/content',
-            modules: 'chrome://ostypes_playground/content/modules'
+            content: 'chrome://ostypes_playground/content/',
+            modules: 'chrome://ostypes_playground/content/modules/'
         }
     },
     os: {
@@ -27,10 +27,11 @@ core.os.mname = core.os.toolkit.indexOf('gtk') == 0 ? 'gtk' : core.os.name; // m
 
 var BOOTSTRAP = this;
 
-switch (core.os.toolkit.indexOf('gtk') == 0 ? 'gtk' : core.os.name) {
+switch (core.os.mname) {
     case 'winnt':
     case 'winmo':
     case 'wince':
+		console.log('loading:', core.addon.path.modules + 'ostypes/ostypes_win.jsm');
         Services.scriptloader.loadSubScript(core.addon.path.modules + 'ostypes/ostypes_win.jsm', BOOTSTRAP);
         break
     case 'gtk':
@@ -50,31 +51,32 @@ var OSStuff = {};
 function main() {
 		
 	var jsCallback = function(lpParameter, TimerOrWaitFired) {
-	  self.postMessage('lpParameter: ' + lpParameter);
-	  self.PostMessage('TimerOrWaitFired: ' + TimerOrWaitFired);
+	  console.log('lpParameter:', lpParameter, 'TimerOrWaitFired:', TimerOrWaitFired);
 	  return undefined;
 	}
 
-	OSStuff.c_Callback = ostypes.TYPE.WAITORTIMERCALLBACK.ptr(jsCallback);
+	OSStuff.cCallback = ostypes.TYPE.WAITORTIMERCALLBACK.ptr(jsCallback);
 	
 	var hNewTimer = ostypes.TYPE.HANDLE();
 	OSStuff.hNewTimer = hNewTimer;
-	ret = ostypes.API('CreateTimerQueueTimer')(
+	var ret = ostypes.API('CreateTimerQueueTimer')(
 	  hNewTimer.address(),
 	  null,
-	  OSStuff.c_Callback,
+	  OSStuff.cCallback,
 	  null,
 	  2000,
 	  0,
 	  ostypes.CONST.WT_EXECUTEDEFAULT
 	);
 	
+	console.log('ret:', ret, 'winLastError:', ctypes.winLastError);
+	
 	OSStuff.xpcomTimer = Cc['@mozilla.org/timer;1'].createInstance(Ci.nsITimer);
 	
 	var cleanup = function() {
 		var rez_del = ostypes.API('DeleteTimerQueueTimer')(null, OSStuff.hNewTimer, null);
 		delete OSStuff.hNewTimer;
-		delete OSStuff.c_Callback;
+		delete OSStuff.cCallback;
 		delete OSStuff.xpcomTimer;
 	};
 	
@@ -87,17 +89,17 @@ function uninstall() {}
 
 function startup(aData, aReason) {
 	
-	main();
+	// main();
 	
 }
 
 function shutdown(aData, aReason) {
 	if (aReason == APP_SHUTDOWN) { return }
 
-	if (OSStuff.xpcomTimer) {
-		OSStuff.xpcomTimer.cancel();
-		delete OSStuff.xpcomTimer;
-	}
+	// if (OSStuff.xpcomTimer) {
+		// OSStuff.xpcomTimer.cancel();
+		// delete OSStuff.xpcomTimer;
+	// }
 }
 
 // start - common helper functions
