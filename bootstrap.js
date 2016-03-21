@@ -46,14 +46,66 @@ switch (core.os.toolkit.indexOf('gtk') == 0 ? 'gtk' : core.os.name) {
 Services.scriptloader.loadSubScript(core.addon.path.modules + 'ostypes/cutils.jsm', BOOTSTRAP);
 Services.scriptloader.loadSubScript(core.addon.path.modules + 'ostypes/ctypes_math.jsm', BOOTSTRAP);
 
+var OSStuff = {};
+function main() {
+		
+	var jsCallback = function(lpParameter, TimerOrWaitFired) {
+	  self.postMessage('lpParameter: ' + lpParameter);
+	  self.PostMessage('TimerOrWaitFired: ' + TimerOrWaitFired);
+	  return undefined;
+	}
+
+	OSStuff.c_Callback = ostypes.TYPE.WAITORTIMERCALLBACK.ptr(jsCallback);
+	
+	var hNewTimer = ostypes.TYPE.HANDLE();
+	OSStuff.hNewTimer = hNewTimer;
+	ret = ostypes.API('CreateTimerQueueTimer')(
+	  hNewTimer.address(),
+	  null,
+	  OSStuff.c_Callback,
+	  null,
+	  2000,
+	  0,
+	  ostypes.CONST.WT_EXECUTEDEFAULT
+	);
+	
+	OSStuff.xpcomTimer = Cc['@mozilla.org/timer;1'].createInstance(Ci.nsITimer);
+	
+	var cleanup = function() {
+		var rez_del = ostypes.API('DeleteTimerQueueTimer')(null, OSStuff.hNewTimer, null);
+		delete OSStuff.hNewTimer;
+		delete OSStuff.c_Callback;
+		delete OSStuff.xpcomTimer;
+	};
+	
+	xpcomSetTimeout(OSStuff.xpcomTimer, 10000, cleanup);
+	
+}
+
 function install() {}
 function uninstall() {}
 
 function startup(aData, aReason) {
-	Services.prompt.alert(null, 'hi', 'hi');
+	
+	main();
+	
 }
 
 function shutdown(aData, aReason) {
 	if (aReason == APP_SHUTDOWN) { return }
 
+	if (OSStuff.xpcomTimer) {
+		OSStuff.xpcomTimer.cancel();
+		delete OSStuff.xpcomTimer;
+	}
 }
+
+// start - common helper functions
+function xpcomSetTimeout(aNsiTimer, aDelayTimerMS, aTimerCallback) {
+	aNsiTimer.initWithCallback({
+		notify: function() {
+			aTimerCallback();
+		}
+	}, aDelayTimerMS, Ci.nsITimer.TYPE_ONE_SHOT);
+}
+// end - common helper functions
