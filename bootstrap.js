@@ -55,7 +55,7 @@ function main() {
 	var jsCallback = function(lpParameter, TimerOrWaitFired) {
 	  console.log('lpParameter:', lpParameter, 'TimerOrWaitFired:', TimerOrWaitFired);
 	  return undefined;
-	}
+	};
 
 	OSStuff.cCallback = ostypes.TYPE.WAITORTIMERCALLBACK.ptr(jsCallback);
 	
@@ -66,17 +66,19 @@ function main() {
 	  null,
 	  OSStuff.cCallback,
 	  null,
-	  2000,
+	  5000,
 	  0,
 	  ostypes.CONST.WT_EXECUTEDEFAULT
 	);
 	
 	console.log('ret:', ret, 'winLastError:', ctypes.winLastError);
+	console.log('hNewTimer:', hNewTimer.toString());
 	
 	OSStuff.xpcomTimer = Cc['@mozilla.org/timer;1'].createInstance(Ci.nsITimer);
 	
 	var cleanup = function() {
 		var rez_del = ostypes.API('DeleteTimerQueueTimer')(null, OSStuff.hNewTimer, null);
+		console.log('rez_del:', rez_del);
 		delete OSStuff.hNewTimer;
 		delete OSStuff.cCallback;
 		delete OSStuff.xpcomTimer;
@@ -92,7 +94,7 @@ function uninstall() {}
 function startup(aData, aReason) {
 	
 	initOstypes();
-	// main();
+	main();
 	
 }
 
