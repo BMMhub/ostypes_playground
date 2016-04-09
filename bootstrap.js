@@ -28,6 +28,8 @@ core.os.mname = core.os.toolkit.indexOf('gtk') == 0 ? 'gtk' : core.os.name; // m
 var BOOTSTRAP = this;
 
 function initOstypes() {
+	Services.scriptloader.loadSubScript(core.addon.path.modules + 'ostypes/cutils.jsm', BOOTSTRAP); // need to load cutils first as ostypes_mac uses it for HollowStructure
+	Services.scriptloader.loadSubScript(core.addon.path.modules + 'ostypes/ctypes_math.jsm', BOOTSTRAP);
 	switch (core.os.mname) {
 		case 'winnt':
 		case 'winmo':
@@ -44,9 +46,6 @@ function initOstypes() {
 		default:
 			throw new Error('Operating system, "' + OS.Constants.Sys.Name + '" is not supported');
 	}
-
-	Services.scriptloader.loadSubScript(core.addon.path.modules + 'ostypes/cutils.jsm', BOOTSTRAP);
-	Services.scriptloader.loadSubScript(core.addon.path.modules + 'ostypes/ctypes_math.jsm', BOOTSTRAP);
 }
 
 var OSStuff = {};
