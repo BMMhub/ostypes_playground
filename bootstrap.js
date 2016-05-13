@@ -51,39 +51,11 @@ function initOstypes() {
 var OSStuff = {};
 function main() {
 		
-	var jsCallback = function(lpParameter, TimerOrWaitFired) {
-	  console.log('lpParameter:', lpParameter, 'TimerOrWaitFired:', TimerOrWaitFired);
-	  return undefined;
-	};
+	// ostypes.API('MessageBox')(null, 'rawr', 'hi', 0);
+	
+}
 
-	OSStuff.cCallback = ostypes.TYPE.WAITORTIMERCALLBACK.ptr(jsCallback);
-	
-	var hNewTimer = ostypes.TYPE.HANDLE();
-	OSStuff.hNewTimer = hNewTimer;
-	var ret = ostypes.API('CreateTimerQueueTimer')(
-	  hNewTimer.address(),
-	  null,
-	  OSStuff.cCallback,
-	  null,
-	  5000,
-	  0,
-	  ostypes.CONST.WT_EXECUTEDEFAULT
-	);
-	
-	console.log('ret:', ret, 'winLastError:', ctypes.winLastError);
-	console.log('hNewTimer:', hNewTimer.toString());
-	
-	OSStuff.xpcomTimer = Cc['@mozilla.org/timer;1'].createInstance(Ci.nsITimer);
-	
-	var cleanup = function() {
-		var rez_del = ostypes.API('DeleteTimerQueueTimer')(null, OSStuff.hNewTimer, null);
-		console.log('rez_del:', rez_del);
-		delete OSStuff.hNewTimer;
-		delete OSStuff.cCallback;
-		delete OSStuff.xpcomTimer;
-	};
-	
-	xpcomSetTimeout(OSStuff.xpcomTimer, 10000, cleanup);
+function unmain() {
 	
 }
 
@@ -100,10 +72,7 @@ function startup(aData, aReason) {
 function shutdown(aData, aReason) {
 	if (aReason == APP_SHUTDOWN) { return }
 
-	// if (OSStuff.xpcomTimer) {
-		// OSStuff.xpcomTimer.cancel();
-		// delete OSStuff.xpcomTimer;
-	// }
+	unmain();
 }
 
 // start - common helper functions
