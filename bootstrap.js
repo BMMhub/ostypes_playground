@@ -49,7 +49,7 @@ function initOstypes() {
 }
 
 var OSStuff = {};
-function main() {
+function enumClipboardTypes() {
 	
 	var rezOpened = ostypes.API('OpenClipboard')(null);
 	console.log('rezOpened:', rezOpened, rezOpened.toString());
@@ -169,6 +169,64 @@ function main() {
 		}
 	}
 	
+}
+
+function getFilesOnClipboard() {
+	// returns platform paths to the files on the clipboard, or null if no files
+	
+	switch (core.os.mname) {
+		case 'winnt':
+			
+				var rezOpened = ostypes.API('OpenClipboard')(null);
+				console.log('rezOpened:', rezOpened, rezOpened.toString());
+				if (!rezOpened) {
+					console.error('Failed to open clipboard, error was:' + ctypes.winLastError);
+					throw new Error('Failed to open clipboard, error was:' + ctypes.winLastError);
+				}
+				
+				try {
+					
+					const CF_HDROP = 15;
+					var rezClipData = ostypes.API('GetClipboardData')(CF_HDROP);
+					if (rezClipData.isNull()) {
+						// nothing on clipboard of tyep CF_HDROP
+						return null;
+					} else {
+						const FILECOUNT = 0xFFFFFFFF;
+						var rezNumFiles = ostypes.API('DragQueryFile')(rezClipData, FILECOUNT, null, 0);
+						console.log('rezNumFiles:', rezNumFiles, rezNumFiles.toString());
+						
+						var filepaths = [];
+						
+						var l = parseInt(cutils.jscGetDeepest(rezNumFiles));
+						var cch = 256;
+						var lpszFile = ostypes.TYPE.LPTSTR.targetType.array(cch)();
+						for (var i=0; i<l; i++) {
+							var rezLength = ostypes.API('DragQueryFile')(rezClipData, i, lpszFile, cch);
+							console.log('rezLength:', rezLength, rezLength.toString());
+							console.log('lpszFile:', lpszFile.readString());
+							filepaths.push(lpszFile.readString());
+						}
+						
+						return filepaths;
+					}
+				} finally {
+					var rezClosed = ostypes.API('CloseClipboard')();
+					console.log('rezClosed:', rezClosed, rezClosed.toString());
+					if (!rezClosed) {
+						console.error('Failed to close clipboard, error was:' + ctypes.winLastError);
+					}
+				}
+			
+			break;
+		default:
+			console.error('Your os is not yet supported, your OS is: ' + core.os.mname);
+	}
+}
+
+function main() {
+	var platformPathsOfFilesOnClipboard = getFilesOnClipboard();
+	console.log('platformPathsOfFilesOnClipboard:', platformPathsOfFilesOnClipboard);
 }
 
 function unmain() {
