@@ -50,7 +50,125 @@ function initOstypes() {
 
 var OSStuff = {};
 function main() {
+	
+	var rezOpened = ostypes.API('OpenClipboard')(null);
+	console.log('rezOpened:', rezOpened, rezOpened.toString());
+	if (!rezOpened) {
+		console.error('Failed to open clipboard, error was:' + ctypes.winLastError);
+		throw new Error('Failed to open clipboard, error was:' + ctypes.winLastError);
+	}
+	
+	try {
 		
+		var cntClipboard = ostypes.API('CountClipboardFormats')();
+		console.log('cntClipboard:', cntClipboard, cntClipboard.toString());
+		cntClipboard = parseInt(cutils.jscGetDeepest(cntClipboard));
+		
+		if (cntClipboard > 0) {
+			// list all formats currently on the clipboard:
+			console.log('there are', cntClipboard, 'formats on the clipboard');
+			
+			var formats = [];
+			var nextFormat = 0;
+			while (true) {
+				nextFormat = ostypes.API('EnumClipboardFormats')(nextFormat);
+				console.log('nextFormat:', nextFormat, nextFormat.toString());
+				nextFormat = parseInt(cutils.jscGetDeepest(nextFormat));
+				
+				if (nextFormat === 0) {
+					// either an error happend, or there are no more formats
+					if (ctypes.winLastError === ostypes.CONST.ERROR_SUCCESS) {
+						// error did not happen, there are no more formats on the clipboard
+					} else {
+						// error happend
+						console.error('An error happend while enumerating formats on clipboard, error was: ' + ctypes.winLastError);
+						throw new Error('An error happend while enumerating formats on clipboard, error was: ' + ctypes.winLastError);
+					}
+					break;
+				}
+				
+				formats.push(nextFormat);
+			}
+			
+			console.log('The codes of the formats on clipboard are:', formats);
+			
+			// lets get strings of the formats - i can get this from calling GetUpdatedClipboardFormats  - https://msdn.microsoft.com/en-us/library/windows/desktop/ms649046(v=vs.85).aspx - but i just copied them from - https://msdn.microsoft.com/en-us/library/windows/desktop/ff729168(v=vs.85).aspx
+			var stdFormats = {
+				CF_TEXT: 1,
+				CF_BITMAP: 2,
+				CF_METAFILEPICT: 3,
+				CF_SYLK: 4,
+				CF_DIF: 5,
+				CF_TIFF: 6,
+				CF_OEMTEXT: 7,
+				CF_DIB: 8,
+				CF_PALETTE: 9,
+				CF_PENDATA: 10,
+				CF_RIFF: 11,
+				CF_WAVE: 12,
+				CF_UNICODETEXT: 13,
+				CF_ENHMETAFILE: 14,
+				CF_HDROP: 15,
+				CF_LOCALE: 16,
+				CF_DIBV5: 17,
+				CF_OWNERDISPLAY: 128,
+				CF_DSPTEXT: 129,
+				CF_DSPBITMAP: 130,
+				CF_DSPMETAFILEPICT: 131,
+				CF_DSPENHMETAFILE: 142,
+				CF_PRIVATEFIRST: 512,
+				CF_PRIVATELAST: 767,
+				CF_GDIOBJFIRST: 768,
+				CF_GDIOBJLAST: 1023
+			};
+			var formatNames = {};
+			var cchMaxCount = 256; // i dont know what to use for this, im just using 255, anyhting longer is truncated
+			var lpszFormatName = ostypes.TYPE.LPTSTR.targetType.array(cchMaxCount)();
+			var l = formats.length;
+			for (var i=0; i<l; i++) {
+				var format = formats[i];
+				
+				var isStdFormat = false;
+				for (var p in stdFormats) {
+					if (stdFormats[p] === format) {
+						formatNames[format] = p;
+						isStdFormat = true;
+						break;
+					}
+				}
+				
+				if (isStdFormat) {
+					continue;
+				}
+				
+				// format MUST NOT be one of the standard formats, otherwise GetClipboardFormatName will result in error of 87 which is ERROR_INVALID_PARAMETER - the docs say "This parameter must not specify any of the predefined clipboard formats."
+				var rezLength = ostypes.API('GetClipboardFormatName')(format, lpszFormatName, cchMaxCount); // will populate cFormatName buffer with null terminator. the return is the length NOT containing the null terminator // Thus if the returned length is one less than the size of your lpszFormatName (in characters) then it's possible the format name was truncated.
+				console.log('rezLength:', rezLength, rezLength.toString());
+				console.log('lpszFormatName.readString():', lpszFormatName.readString());
+				
+				rezLength = parseInt(cutils.jscGetDeepest(rezLength));
+				if (rezLength === 0) {
+					console.error('Error occured while trying to get name of format "' + format + '", it may be that this format is one of the standard formats but it was documented in the spot where I got it from, to be most accuration I should call GetUpdatedClipboardFormats to get all standard formats, the error was: ' + ctypes.winLastError);
+					// throw new Error('Error occured while trying to get name of format "' + format + '", the error was: ' + ctypes.winLastError);
+				} else {
+					formatNames[format] = lpszFormatName.readString(); // because readString reads up till the nul term, and because GetClipboardFormatName populates lpszFormatName with null term, i dont need to do `.substr(0, rezLength)` even though I am reusing the buffer. as the buffer
+				}
+			}
+		} else {
+			console.log('there is nothing on the clipboard');
+		}
+		
+		console.log('The names of the formats on clipboard are:', formatNames);
+		
+		
+	} finally {
+		var rezClosed = ostypes.API('CloseClipboard')();
+		console.log('rezClosed:', rezClosed, rezClosed.toString());
+		if (!rezClosed) {
+			console.error('Failed to close clipboard, error was:' + ctypes.winLastError);
+		}
+	}
+	
 }
 
 function unmain() {
