@@ -94,6 +94,21 @@ function main() {
 	switch (core.os.mname) {
 			case 'winnt':
 
+					// var VARIANT_BSTR = ctypes.StructType('tagVARIANT', [
+					// 	{ vt: ostypes.TYPE.VARTYPE },
+					// 	{ wReserved1: ostypes.TYPE.WORD },
+					// 			{ wReserved2: ostypes.TYPE.WORD },
+					// 	    	{ wReserved3: ostypes.TYPE.WORD },
+					// 	{ pbstrVal: ostypes.TYPE.BSTR }
+					// ]);
+					ostypes.TYPE.VARIANT.define([
+						{ vt: ostypes.TYPE.VARTYPE },
+						{ wReserved1: ostypes.TYPE.WORD },
+						{ wReserved2: ostypes.TYPE.WORD },
+						{ wReserved3: ostypes.TYPE.WORD },
+						{ bstrVal: ostypes.TYPE.BSTR }
+					]);
+
 					var hr_CoInit = ostypes.API('CoInitializeEx')(null, ostypes.CONST.COINIT_APARTMENTTHREADED);
 					console.info('hr_CoInit:', hr_CoInit, hr_CoInit.toString(), uneval(hr_CoInit) ,ostypes.HELPER.getStrOfResult(hr_CoInit));
 					// ostypes.HELPER.checkHRESULT(hr_CoInit, 'CoInit') // cannot use this as it throws `SPECIAL HRESULT FAIL RESULT!!! HRESULT is 1!!! hr: Int64 {  } funcName: CoInit`
@@ -137,17 +152,18 @@ function main() {
 								if (ostypes.HELPER.checkHR(hr_bind, 'hr_bind')) {
 									var propBag = propBagPtr.contents.lpVtbl.contents;
 
-									// // Initialise the variant data type
-									// var varName = ostypes.TYPE.VARIANT();
-									// ostypes.TYPE.API('VariantInit')(varName.address());
-									//
-									// var hr_read = propBag.Read('FriendlyName', varName.address(), null);
-									// if (ostypes.HELPER.checkHR(hr_read, 'hr_read')) {
-									// 	console.log('varName.bstrVal:', varName.bstrVal.readString());
-									// }
-									//
-									// //clear the variant data type
-									// ostypes.TYPE.API('VariantClear')(varName.address());
+									// Initialise the variant data type
+									var varName = ostypes.TYPE.VARIANT();
+									ostypes.API('VariantInit')(varName.address());
+
+									var hr_read = propBag.Read(propBagPtr, 'FriendlyName', varName.address(), null);
+									console.log('varName:', varName, varName.toString(), uneval(varName));
+									if (ostypes.HELPER.checkHR(hr_read, 'hr_read')) {
+										console.log('varName.bstrVal:', varName.bstrVal.readString());
+									}
+
+									//clear the variant data type
+									ostypes.API('VariantClear')(varName.address());
 
 									var releasePropBag = propBag.Release(propBagPtr); // release the properties
 									console.log('releasePropBag:', releasePropBag, releasePropBag.toString());
