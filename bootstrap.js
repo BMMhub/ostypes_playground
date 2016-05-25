@@ -91,27 +91,19 @@ function waveIn() {
 }
 
 function main() {
-	console.log('ok');
-	return;
 	switch (core.os.mname) {
 			case 'winnt':
 
 					var hr_CoInit = ostypes.API('CoInitializeEx')(null, ostypes.CONST.COINIT_APARTMENTTHREADED);
 					console.info('hr_CoInit:', hr_CoInit, hr_CoInit.toString(), uneval(hr_CoInit) ,ostypes.HELPER.getStrOfResult(hr_CoInit));
 					// ostypes.HELPER.checkHRESULT(hr_CoInit, 'CoInit') // cannot use this as it throws `SPECIAL HRESULT FAIL RESULT!!! HRESULT is 1!!! hr: Int64 {  } funcName: CoInit`
-					if (cutils.jscEqual(ostypes.CONST.S_OK, hr_CoInit)) {
-						console.log('hr_CoInit says successfully initialized');
-					} else if (cutils.jscEqual(ostypes.CONST.S_FALSE, hr_CoInit)) {
-						console.warn('hr_CoInit says the COM library is already initialized on this thread!!! This is weird I dont expect this to ever happen.'); // i made this console.error so it brings it to my attention. i dont expect this, if it happens i need to deal with it. thats why i dont throw new error here
-						// warn, not an error, as i think i can proceed just fine
-					} else {
-						console.error('Unexpected return value from CoInitializeEx: ', hr);
+					if (!ostypes.HELPER.checkHR(hr_CoInit, 'hr_CoInit')) {
 						throw new Error('Unexpected return value from CoInitializeEx: ' + hr);
 					}
 
-					var deviceEnum;
 					var deviceEnumPtr;
-					try {
+					var deviceEnum;
+					// try {
 						var CLSID_SystemDeviceEnum = ostypes.HELPER.CLSIDFromArr([0x62be5d10, 0x60eb, 0x11d0,[0xbd, 0x3b, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]]);
 						var IID_ICreateDevEnum = ostypes.HELPER.CLSIDFromString('29840822-5B84-11D0-BD3B-00A0C911CE86');
 
@@ -123,57 +115,64 @@ function main() {
 						// Enumerate the specified device, distinguished by DEVICE_CLSID such as CLSID_AudioInputDeviceCategory
 						var CLSID_AudioInputDeviceCategory = ostypes.HELPER.CLSIDFromArr([0x33d9a762, 0x90c8, 0x11d0, [0xbd, 0x43, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]])
 						var enumCatPtr = ostypes.TYPE.IEnumMoniker.ptr();
-						var enumCat = enumCatPtr.contents.lpVtbl.contents;
 					    var hr_enum = deviceEnum.CreateClassEnumerator(deviceEnumPtr, CLSID_AudioInputDeviceCategory.address(), enumCatPtr.address(), 0);
-						ostypes.HELPER.checkHRESULT(hr_enum, 'device enum');
+						if (ostypes.HELPER.checkHR(hr_enum, 'hr_enum')) {
+							var enumCat = enumCatPtr.contents.lpVtbl.contents;
 
-						var IID_IPropertyBag = ostypes.HELPER.CLSIDFromString('55272A00-42CB-11CE-8135-00AA004BB851');
-						var propBagPtr = ostypes.TYPE.IPropertyBag.ptr();
-						var propBag = propBagPtr.contents.lpVtbl.contents;
-						var devMonikPtr = ostypes.TYPE.IMoniker.ptr();
-						var devMonik = devMonikPtr.contents.lpVtbl.contents;
-						var fetched = ostypes.TYPE.ULONG();
-						while (true) {
-							// pickup as moniker
-							var hr_next = enumCat.Next(enumCatPtr, 1, devMonikPtr.address(), fetched.address());
-							console.log('hr_next:', hr_next, hr_next.toString(), uneval(hr_next), ostypes.HELPER.getStrOfResult(hr_next));
-							if (!ostypes.HELPER.checkHR(hr_next, 'hr_next')) {
-								break;
-							}
-
-							// bind the properties of the moniker
-							var hr_bind = devMonik.BindToStorage(devMonikPtr, null, null, IID_IPropertyBag.address(), propBagPtr.address());
-							if (ostypes.HELPER.checkHR(hr_bind, 'hr_bind')) {
-
-								// Initialise the variant data type
-								var varName = ostypes.TYPE.VARIANT();
-								ostypes.TYPE.API('VariantInit')(varName.address());
-
-								var hr_read = propBag.Read('FriendlyName', varName.address(), null);
-								if (ostypes.HELPER.checkHR(hr_read, 'hr_read')) {
-									console.log('varName.bstrVal:', varName.bstrVal.readString());
+							var IID_IPropertyBag = ostypes.HELPER.CLSIDFromString('55272A00-42CB-11CE-8135-00AA004BB851');
+							var propBagPtr = ostypes.TYPE.IPropertyBag.ptr();
+							var devMonikPtr = ostypes.TYPE.IMoniker.ptr();
+							var fetched = ostypes.TYPE.ULONG();
+							// while (true) {
+								// pickup as moniker
+								var hr_next = enumCat.Next(enumCatPtr, 1, devMonikPtr.address(), fetched.address());
+								if (!ostypes.HELPER.checkHR(hr_next, 'hr_next')) {
+									break;
 								}
+								console.log('fetched:', fetched, fetched.toString(), cutils.jscGetDeepest(fetched));
+								var devMonik = devMonikPtr.contents.lpVtbl.contents;
 
-								//clear the variant data type
-								ostypes.TYPE.API('VariantClear')(varName.address());
+								// bind the properties of the moniker
+								var hr_bind = devMonik.BindToStorage(devMonikPtr, null, null, IID_IPropertyBag.address(), propBagPtr.address());
+								if (ostypes.HELPER.checkHR(hr_bind, 'hr_bind')) {
+									var propBag = propBagPtr.contents.lpVtbl.contents;
 
-								propBag.Release(propBagPtr); // release the properties
-							}
-							devMonik.Release(devMonikPtr); // release Device moniker
+									// // Initialise the variant data type
+									// var varName = ostypes.TYPE.VARIANT();
+									// ostypes.TYPE.API('VariantInit')(varName.address());
+									//
+									// var hr_read = propBag.Read('FriendlyName', varName.address(), null);
+									// if (ostypes.HELPER.checkHR(hr_read, 'hr_read')) {
+									// 	console.log('varName.bstrVal:', varName.bstrVal.readString());
+									// }
+									//
+									// //clear the variant data type
+									// ostypes.TYPE.API('VariantClear')(varName.address());
+
+									var releasePropBag = propBag.Release(propBagPtr); // release the properties
+									console.log('releasePropBag:', releasePropBag, releasePropBag.toString());
+								}
+								var releaseDevMonik = devMonik.Release(devMonikPtr); // release Device moniker
+								console.log('releaseDevMonik:', releaseDevMonik, releaseDevMonik.toString());
+							// }
+
+							var releaseEnumCat = enumCat.Release(enumCatPtr); // release category enumerator
+							console.log('releaseEnumCat:', releaseEnumCat, releaseEnumCat.toString());
 						}
-						enumCat.Release(enumCatPtr); // release category enumerator
-					} catch(ex) {
-						console.error('ERROR:', ex);
-					} finally {
-						if (deviceEnum) {
-							var rez_refCnt = taskbarList.Release(taskbarListPtr);
-							console.log('rez_refCnt:', rez_refCnt, rez_refCnt.toString());
+					// } catch(ex) {
+					// 	console.error('ERROR:', ex);
+					// } finally {
+						if (!deviceEnumPtr.isNull()) {
+							var releaseDeviceEnum = deviceEnum.Release(deviceEnumPtr);
+							console.log('releaseDeviceEnum:', releaseDeviceEnum, releaseDeviceEnum.toString());
+						} else {
+							console.log('deviceEnumPtr is null', deviceEnumPtr, deviceEnumPtr.toString());
 						}
 						//if (shouldUninitialize) { // should always CoUninit even if CoInit returned false, per the docs on msdn
 							ostypes.API('CoUninitialize')(); // return void
 							console.log('did CoUnit');
 						//}
-					}
+					// }
 
 				break;
 			default:
