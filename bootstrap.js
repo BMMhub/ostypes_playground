@@ -50,21 +50,56 @@ function initOstypes() {
 
 var OSStuff = {};
 function main() {
-		
+	switch (core.os.mname) {
+			case 'winnt':
+
+					const MMSYSERR_NOERROR = 0;
+
+					var nDevices = ostypes.API('waveInGetNumDevs')();
+					console.log('nDevices:', nDevices, nDevices.toString(), uneval(nDevices));
+
+					var formats = [];
+					var stWIC = ostypes.TYPE.WAVEINCAPS();
+					console.log('ostypes.TYPE.WAVEINCAPS.size:', ostypes.TYPE.WAVEINCAPS.size);
+					for(var i=0; i<nDevices; i++) {
+						var mRes = ostypes.API('waveInGetDevCaps')(i, stWIC.address(), ostypes.TYPE.WAVEINCAPS.size);
+						console.log('mRes:', mRes, mRes.toString(), uneval(mRes));
+						if (!cutils.jscEqual(mRes, MMSYSERR_NOERROR)) {
+							console.error('failed to get waveInGetDevCaps, mRes:', mRes, mRes.toString());
+							throw new Error('failed to get waveInGetDevCaps');
+						}
+						console.log('stWIC:', stWIC, stWIC.toString(), uneval(stWIC));
+						formats.push(stWIC.szPname.readString());
+					}
+					console.log('formats:', formats);
+
+					try {
+
+					} catch(ex) {
+						console.error('error occoured:', ex);
+					} finally {
+
+					}
+
+				break;
+			default:
+				console.error('Your os is not yet supported, your OS is: ' + core.os.mname);
+				throw new Error('Your os is not yet supported, your OS is: ' + core.os.mname);
+	}
 }
 
 function unmain() {
-	
+
 }
 
 function install() {}
 function uninstall() {}
 
 function startup(aData, aReason) {
-	
+
 	initOstypes();
 	main();
-	
+
 }
 
 function shutdown(aData, aReason) {
