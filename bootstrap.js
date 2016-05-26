@@ -94,20 +94,20 @@ function main() {
 	switch (core.os.mname) {
 			case 'winnt':
 
-					// var VARIANT_BSTR = ctypes.StructType('tagVARIANT', [
-					// 	{ vt: ostypes.TYPE.VARTYPE },
-					// 	{ wReserved1: ostypes.TYPE.WORD },
-					// 			{ wReserved2: ostypes.TYPE.WORD },
-					// 	    	{ wReserved3: ostypes.TYPE.WORD },
-					// 	{ pbstrVal: ostypes.TYPE.BSTR }
-					// ]);
-					ostypes.TYPE.VARIANT.define([
+					var VARIANT_BSTR = ctypes.StructType('tagVARIANT', [
 						{ vt: ostypes.TYPE.VARTYPE },
 						{ wReserved1: ostypes.TYPE.WORD },
-						{ wReserved2: ostypes.TYPE.WORD },
-						{ wReserved3: ostypes.TYPE.WORD },
+								{ wReserved2: ostypes.TYPE.WORD },
+						    	{ wReserved3: ostypes.TYPE.WORD },
 						{ bstrVal: ostypes.TYPE.BSTR }
 					]);
+					// ostypes.TYPE.VARIANT.define([
+					// 	{ vt: ostypes.TYPE.VARTYPE },
+					// 	{ wReserved1: ostypes.TYPE.WORD },
+					// 	{ wReserved2: ostypes.TYPE.WORD },
+					// 	{ wReserved3: ostypes.TYPE.WORD },
+					// 	{ bstrVal: ostypes.TYPE.BSTR }
+					// ]);
 
 					var hr_CoInit = ostypes.API('CoInitializeEx')(null, ostypes.CONST.COINIT_APARTMENTTHREADED);
 					console.info('hr_CoInit:', hr_CoInit, hr_CoInit.toString(), uneval(hr_CoInit) ,ostypes.HELPER.getStrOfResult(hr_CoInit));
@@ -138,7 +138,11 @@ function main() {
 							var propBagPtr = ostypes.TYPE.IPropertyBag.ptr();
 							var devMonikPtr = ostypes.TYPE.IMoniker.ptr();
 							var fetched = ostypes.TYPE.ULONG();
-							// while (true) {
+							var ti = 0;
+							while (true) {
+								ti++;
+								if (ti > 1) { break }
+								console.error('enter loop');
 								// pickup as moniker
 								var hr_next = enumCat.Next(enumCatPtr, 1, devMonikPtr.address(), fetched.address());
 								if (!ostypes.HELPER.checkHR(hr_next, 'hr_next')) {
@@ -158,8 +162,10 @@ function main() {
 
 									var hr_read = propBag.Read(propBagPtr, 'FriendlyName', varName.address(), null);
 									console.log('varName:', varName, varName.toString(), uneval(varName));
+									varNameCast = ctypes.cast(varName.address(), VARIANT_BSTR.ptr).contents;
+									console.log('varNameCast:', varNameCast, varNameCast.toString(), uneval(varNameCast));
 									if (ostypes.HELPER.checkHR(hr_read, 'hr_read')) {
-										console.log('varName.bstrVal:', varName.bstrVal.readString());
+										console.log('varNameCast.bstrVal:', varNameCast.bstrVal.readString());
 									}
 
 									//clear the variant data type
@@ -170,7 +176,7 @@ function main() {
 								}
 								var releaseDevMonik = devMonik.Release(devMonikPtr); // release Device moniker
 								console.log('releaseDevMonik:', releaseDevMonik, releaseDevMonik.toString());
-							// }
+							}
 
 							var releaseEnumCat = enumCat.Release(enumCatPtr); // release category enumerator
 							console.log('releaseEnumCat:', releaseEnumCat, releaseEnumCat.toString());
