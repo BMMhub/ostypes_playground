@@ -129,9 +129,10 @@ function main() {
 
 						// Enumerate the specified device, distinguished by DEVICE_CLSID such as CLSID_AudioInputDeviceCategory
 						var CLSID_AudioInputDeviceCategory = ostypes.HELPER.CLSIDFromArr([0x33d9a762, 0x90c8, 0x11d0, [0xbd, 0x43, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]])
+
 						var enumCatPtr = ostypes.TYPE.IEnumMoniker.ptr();
 					    var hr_enum = deviceEnum.CreateClassEnumerator(deviceEnumPtr, CLSID_AudioInputDeviceCategory.address(), enumCatPtr.address(), 0);
-						if (ostypes.HELPER.checkHR(hr_enum, 'hr_enum')) {
+						if (ostypes.HELPER.checkHR(hr_enum, 'hr_enum') === 1) {
 							var enumCat = enumCatPtr.contents.lpVtbl.contents;
 
 							var IID_IPropertyBag = ostypes.HELPER.CLSIDFromString('55272A00-42CB-11CE-8135-00AA004BB851');
