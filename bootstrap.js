@@ -136,20 +136,18 @@ function main() {
 
 							var IID_IPropertyBag = ostypes.HELPER.CLSIDFromString('55272A00-42CB-11CE-8135-00AA004BB851');
 							var propBagPtr = ostypes.TYPE.IPropertyBag.ptr();
-							var devMonikPtr = ostypes.TYPE.IMoniker.ptr();
 							var fetched = ostypes.TYPE.ULONG();
-							var ti = 0;
 							while (true) {
-								ti++;
-								if (ti > 1) { break }
-								console.error('enter loop');
 								// pickup as moniker
-								var hr_next = enumCat.Next(enumCatPtr, 1, devMonikPtr.address(), fetched.address());
-								if (!ostypes.HELPER.checkHR(hr_next, 'hr_next')) {
+								var devMonikPtr = ostypes.TYPE.IMoniker.ptr();
+								var devMonik = null;
+								var hr_next =  enumCat.Next(enumCatPtr, 1, devMonikPtr.address(), fetched.address());
+								console.log('hr_next:', hr_next.toString(), 'fetched:', cutils.jscGetDeepest(fetched));
+								if (ostypes.HELPER.checkHR(hr_next, 'hr_next') !== 1) {
+									// when fetched is 0, we get hr_next of `1` which is "did not succeed but did not fail", so checkHR returns -1
 									break;
 								}
-								console.log('fetched:', fetched, fetched.toString(), cutils.jscGetDeepest(fetched));
-								var devMonik = devMonikPtr.contents.lpVtbl.contents;
+								devMonik = devMonikPtr.contents.lpVtbl.contents;
 
 								// bind the properties of the moniker
 								var hr_bind = devMonik.BindToStorage(devMonikPtr, null, null, IID_IPropertyBag.address(), propBagPtr.address());
@@ -174,6 +172,7 @@ function main() {
 									var releasePropBag = propBag.Release(propBagPtr); // release the properties
 									console.log('releasePropBag:', releasePropBag, releasePropBag.toString());
 								}
+
 								var releaseDevMonik = devMonik.Release(devMonikPtr); // release Device moniker
 								console.log('releaseDevMonik:', releaseDevMonik, releaseDevMonik.toString());
 							}
