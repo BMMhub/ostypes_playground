@@ -90,165 +90,206 @@ function waveIn() {
 	}
 }
 
-function main() {
-	switch (core.os.mname) {
+function listAudio_InputAndRenderers() {
+  switch (core.os.mname) {
 			case 'winnt':
 
 					var VARIANT_BSTR = ctypes.StructType('tagVARIANT', [
 						{ vt: ostypes.TYPE.VARTYPE },
-						{ wReserved1: ostypes.TYPE.WORD },
-						{ wReserved2: ostypes.TYPE.WORD },
-			    	{ wReserved3: ostypes.TYPE.WORD },
-						{ bstrVal: ostypes.TYPE.BSTR }
+                        { wReserved1: ostypes.TYPE.WORD },
+                        { wReserved2: ostypes.TYPE.WORD },
+                        { wReserved3: ostypes.TYPE.WORD },
+                        { bstrVal: ostypes.TYPE.BSTR }
 					]);
-          var VARIANT_LONG = ctypes.StructType('tagVARIANT', [
-						{ vt: ostypes.TYPE.VARTYPE },
-						{ wReserved1: ostypes.TYPE.WORD },
-						{ wReserved2: ostypes.TYPE.WORD },
-			    	{ wReserved3: ostypes.TYPE.WORD },
-						{ lVal: ostypes.TYPE.LONG }
-					]);
-					// ostypes.TYPE.VARIANT.define([
-					// 	{ vt: ostypes.TYPE.VARTYPE },
-					// 	{ wReserved1: ostypes.TYPE.WORD },
-					// 	{ wReserved2: ostypes.TYPE.WORD },
-					// 	{ wReserved3: ostypes.TYPE.WORD },
-					// 	{ bstrVal: ostypes.TYPE.BSTR }
-					// ]);
-
-					// var hr_CoInit = ostypes.API('CoInitializeEx')(null, ostypes.CONST.COINIT_MULTITHREADED);
-					// console.info('hr_CoInit:', hr_CoInit, hr_CoInit.toString(), uneval(hr_CoInit) ,ostypes.HELPER.getStrOfResult(hr_CoInit));
-					// // ostypes.HELPER.checkHRESULT(hr_CoInit, 'CoInit') // cannot use this as it throws `SPECIAL HRESULT FAIL RESULT!!! HRESULT is 1!!! hr: Int64 {  } funcName: CoInit`
-					// if (!ostypes.HELPER.checkHR(hr_CoInit, 'hr_CoInit')) {
-					// 	throw new Error('Unexpected return value from CoInitializeEx: ' + hr_CoInit);
-					// }
 
 					var deviceEnumPtr;
 					var deviceEnum;
-					// try {
-						var CLSID_SystemDeviceEnum = ostypes.HELPER.CLSIDFromArr([0x62be5d10, 0x60eb, 0x11d0,[0xbd, 0x3b, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]]);
-						var IID_ICreateDevEnum = ostypes.HELPER.CLSIDFromString('29840822-5B84-11D0-BD3B-00A0C911CE86');
 
-						deviceEnumPtr = ostypes.TYPE.ICreateDevEnum.ptr();
-						var hr_instDeviceNum = ostypes.API('CoCreateInstance')(CLSID_SystemDeviceEnum.address(), null, ostypes.CONST.CLSCTX_INPROC_SERVER, IID_ICreateDevEnum.address(), deviceEnumPtr.address());//Initialise Device enumerator
-						ostypes.HELPER.checkHRESULT(hr_instDeviceNum, 'instantiate deviceEnum');
-						deviceEnum = deviceEnumPtr.contents.lpVtbl.contents;
+					var CLSID_SystemDeviceEnum = ostypes.HELPER.CLSIDFromArr([0x62be5d10, 0x60eb, 0x11d0,[0xbd, 0x3b, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]]);
+					var IID_ICreateDevEnum = ostypes.HELPER.CLSIDFromString('29840822-5B84-11D0-BD3B-00A0C911CE86');
 
-						// Enumerate the specified device, distinguished by DEVICE_CLSID such as CLSID_AudioInputDeviceCategory
-						var CLSID_AudioInputDeviceCategory = ostypes.HELPER.CLSIDFromArr([0x33d9a762, 0x90c8, 0x11d0, [0xbd, 0x43, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]])
-            var CLSID_AudioRendererCategory = ostypes.HELPER.CLSIDFromArr([0xe0f158e1, 0xcb04, 0x11d0, [0xbd, 0x4e, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]]);
+					deviceEnumPtr = ostypes.TYPE.ICreateDevEnum.ptr();
+					var hr_instDeviceNum = ostypes.API('CoCreateInstance')(CLSID_SystemDeviceEnum.address(), null, ostypes.CONST.CLSCTX_INPROC_SERVER, IID_ICreateDevEnum.address(), deviceEnumPtr.address());//Initialise Device enumerator
+					ostypes.HELPER.checkHRESULT(hr_instDeviceNum, 'instantiate deviceEnum');
+					deviceEnum = deviceEnumPtr.contents.lpVtbl.contents;
 
-						var enumCatPtr = ostypes.TYPE.IEnumMoniker.ptr();
-					  var hr_enum = deviceEnum.CreateClassEnumerator(deviceEnumPtr, CLSID_AudioInputDeviceCategory.address(), enumCatPtr.address(), 0);
-						if (ostypes.HELPER.checkHR(hr_enum, 'hr_enum') === 1) {
-							var enumCat = enumCatPtr.contents.lpVtbl.contents;
+					// Enumerate the specified device, distinguished by DEVICE_CLSID such as CLSID_AudioInputDeviceCategory
+					var CLSID_AudioInputDeviceCategory = ostypes.HELPER.CLSIDFromArr([0x33d9a762, 0x90c8, 0x11d0, [0xbd, 0x43, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]])
+                    var CLSID_AudioRendererCategory = ostypes.HELPER.CLSIDFromArr([0xe0f158e1, 0xcb04, 0x11d0, [0xbd, 0x4e, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]]);
 
-							var IID_IPropertyBag = ostypes.HELPER.CLSIDFromString('55272A00-42CB-11CE-8135-00AA004BB851');
-							var propBagPtr = ostypes.TYPE.IPropertyBag.ptr();
-							var fetched = ostypes.TYPE.ULONG();
-              var varName;
-              var devices = [];
-							while (true) {
-                var device_info = {};
 
-								// pickup as moniker
-								var devMonikPtr = ostypes.TYPE.IMoniker.ptr();
-								var devMonik = null;
-								var hr_next =  enumCat.Next(enumCatPtr, 1, devMonikPtr.address(), fetched.address());
-								console.log('hr_next:', hr_next.toString(), 'fetched:', cutils.jscGetDeepest(fetched));
-								if (ostypes.HELPER.checkHR(hr_next, 'hr_next') !== 1) {
-									// when fetched is 0, we get hr_next of `1` which is "did not succeed but did not fail", so checkHR returns -1
-									break;
-								}
-								devMonik = devMonikPtr.contents.lpVtbl.contents;
+                    var IID_IPropertyBag = ostypes.HELPER.CLSIDFromString('55272A00-42CB-11CE-8135-00AA004BB851');
+                    var fetched = ostypes.TYPE.ULONG();
+                    var varName;
+                    var devices = [];
+                    var categories = [CLSID_AudioInputDeviceCategory, CLSID_AudioRendererCategory];
+                    for (var i=0; i<categories.length; i++) {
+                        var category = categories[i];
+                        var enumCatPtr = ostypes.TYPE.IEnumMoniker.ptr();
+        				var hr_enum = deviceEnum.CreateClassEnumerator(deviceEnumPtr, category.address(), enumCatPtr.address(), 0);
+    					if (ostypes.HELPER.checkHR(hr_enum, 'hr_enum') === 1) {
+    						var enumCat = enumCatPtr.contents.lpVtbl.contents;
 
-								// bind the properties of the moniker
-								var hr_bind = devMonik.BindToStorage(devMonikPtr, null, null, IID_IPropertyBag.address(), propBagPtr.address());
-								if (ostypes.HELPER.checkHR(hr_bind, 'hr_bind')) {
-									var propBag = propBagPtr.contents.lpVtbl.contents;
+                            while (true) {
+                                var device_info = {};
 
-                  // NEXT PROP
-                  if (!varName) {
-                    // Initialise the variant data type
-  									varName = ostypes.TYPE.VARIANT();
-  									ostypes.API('VariantInit')(varName.address());
-                  }
+    							// pickup as moniker
+    							var devMonikPtr = ostypes.TYPE.IMoniker.ptr();
+    							var devMonik = null;
+    							var hr_next =  enumCat.Next(enumCatPtr, 1, devMonikPtr.address(), fetched.address());
+    							console.log('hr_next:', hr_next.toString(), 'fetched:', cutils.jscGetDeepest(fetched));
+    							if (ostypes.HELPER.checkHR(hr_next, 'hr_next') !== 1) {
+    								// when fetched is 0, we get hr_next of `1` which is "did not succeed but did not fail", so checkHR returns -1
+    								break;
+    							}
+    							devMonik = devMonikPtr.contents.lpVtbl.contents;
 
-									var hr_read = propBag.Read(propBagPtr, 'FriendlyName', varName.address(), null);
-									// console.log('varName:', varName, varName.toString(), uneval(varName));
-									varNameCast = ctypes.cast(varName.address(), VARIANT_BSTR.ptr).contents;
-									// console.log('varNameCast:', varNameCast, varNameCast.toString(), uneval(varNameCast));
-									if (ostypes.HELPER.checkHR(hr_read, 'hr_read')) {
-										// console.log('FriendlyName:', 'varNameCast.bstrVal:', varNameCast.bstrVal.readString());
+    							// bind the properties of the moniker
+                                var propBagPtr = ostypes.TYPE.IPropertyBag.ptr();
+    							var hr_bind = devMonik.BindToStorage(devMonikPtr, null, null, IID_IPropertyBag.address(), propBagPtr.address());
+    							if (ostypes.HELPER.checkHR(hr_bind, 'hr_bind')) {
+    								var propBag = propBagPtr.contents.lpVtbl.contents;
 
-                    device_info.FriendlyName = varNameCast.bstrVal.readString();
+                                    // NEXT PROP
+                                    if (!varName) {
+                                        // Initialise the variant data type
+                                        varName = ostypes.TYPE.VARIANT();
+                                        ostypes.API('VariantInit')(varName.address());
+                                    }
 
-                    //clear the variant data type
-  									ostypes.API('VariantClear')(varName.address());
-									}
+    								var hr_read = propBag.Read(propBagPtr, 'FriendlyName', varName.address(), null);
+    								// console.log('varName:', varName, varName.toString(), uneval(varName));
+    								varNameCast = ctypes.cast(varName.address(), VARIANT_BSTR.ptr).contents;
+    								// console.log('varNameCast:', varNameCast, varNameCast.toString(), uneval(varNameCast));
+    								if (ostypes.HELPER.checkHR(hr_read, 'hr_read')) {
+    									// console.log('FriendlyName:', 'varNameCast.bstrVal:', varNameCast.bstrVal.readString());
 
-                  // NEXT PROP
-									var hr_read = propBag.Read(propBagPtr, 'WaveInID', varName.address(), null);
-									varNameCast = ctypes.cast(varName.address(), VARIANT_LONG.ptr).contents;
-									if (ostypes.HELPER.checkHR(hr_read, 'hr_read')) {
-										// console.log('WaveInID:', 'varNameCast.lVal:', cutils.jscGetDeepest(varNameCast.lVal));
+                                        device_info.FriendlyName = varNameCast.bstrVal.readString();
 
-                    device_info.WaveInID = cutils.jscGetDeepest(varNameCast.lVal);
+                                        //clear the variant data type
+    									ostypes.API('VariantClear')(varName.address());
+    								}
 
-  									//clear the variant data type
-  									ostypes.API('VariantClear')(varName.address());
-									}
+                                    // NEXT PROP
+    								var hr_read = propBag.Read(propBagPtr, 'CLSID', varName.address(), null);
+    								varNameCast = ctypes.cast(varName.address(), VARIANT_BSTR.ptr).contents;
+    								if (ostypes.HELPER.checkHR(hr_read, 'hr_read')) {
+    									// console.log('CLSID:', 'varNameCast.bstrVal:', varNameCast.bstrVal.readString());
 
-                  // NEXT PROP
-									var hr_read = propBag.Read(propBagPtr, 'CLSID', varName.address(), null);
-									varNameCast = ctypes.cast(varName.address(), VARIANT_BSTR.ptr).contents;
-									if (ostypes.HELPER.checkHR(hr_read, 'hr_read')) {
-										// console.log('CLSID:', 'varNameCast.bstrVal:', varNameCast.bstrVal.readString());
+                                        device_info.CLSID = varNameCast.bstrVal.readString(); // is "{E30629D2-27E5-11CE-875D-00608CB78066}" without the quotes
 
-                    device_info.CLSID = varNameCast.bstrVal.readString(); // is "{E30629D2-27E5-11CE-875D-00608CB78066}" without the quotes
+    									//clear the variant data type
+    									ostypes.API('VariantClear')(varName.address());
+    								}
 
-  									//clear the variant data type
-  									ostypes.API('VariantClear')(varName.address());
-									}
+    								var releasePropBag = propBag.Release(propBagPtr); // release the properties
+    								console.log('releasePropBag:', releasePropBag, releasePropBag.toString());
+    							}
 
-									var releasePropBag = propBag.Release(propBagPtr); // release the properties
-									console.log('releasePropBag:', releasePropBag, releasePropBag.toString());
-								}
+    							var releaseDevMonik = devMonik.Release(devMonikPtr); // release Device moniker
+    							console.log('releaseDevMonik:', releaseDevMonik, releaseDevMonik.toString());
 
-                // var pCap =
-                // var IID_IBaseFilter = ostypes.HELPER.CLSIDFromArr([0x56A86895, 0x0AD4, 0x11CE, [0xB0, 0x3A, 0x00, 0x20, 0xAF, 0x0B, 0xA7, 0x70]]);
-                // var hr_base = devMonik.BindToObject(devMonikPtr, null, null, IID_IBaseFilter, pCap.address());
+                                devices.push(device_info);
+    						}
 
-								var releaseDevMonik = devMonik.Release(devMonikPtr); // release Device moniker
-								console.log('releaseDevMonik:', releaseDevMonik, releaseDevMonik.toString());
+    						var releaseEnumCat = enumCat.Release(enumCatPtr); // release category enumerator
+    						console.log('releaseEnumCat:', releaseEnumCat, releaseEnumCat.toString());
+    					}
+                    }
+                    console.log('devices:', devices);
 
-                devices.push(device_info);
-							}
-              console.log('devices:', devices);
-
-							var releaseEnumCat = enumCat.Release(enumCatPtr); // release category enumerator
-							console.log('releaseEnumCat:', releaseEnumCat, releaseEnumCat.toString());
-						}
-					// } catch(ex) {
-					// 	console.error('ERROR:', ex);
-					// } finally {
-						if (!deviceEnumPtr.isNull()) {
-							var releaseDeviceEnum = deviceEnum.Release(deviceEnumPtr);
-							console.log('releaseDeviceEnum:', releaseDeviceEnum, releaseDeviceEnum.toString());
-						} else {
-							console.log('deviceEnumPtr is null', deviceEnumPtr, deviceEnumPtr.toString());
-						}
-						//if (shouldUninitialize) { // should always CoUninit even if CoInit returned false, per the docs on msdn
-							// ostypes.API('CoUninitialize')(); // return void
-							// console.log('did CoUnit');
-						//}
-					// }
+					if (!deviceEnumPtr.isNull()) {
+						var releaseDeviceEnum = deviceEnum.Release(deviceEnumPtr);
+						console.log('releaseDeviceEnum:', releaseDeviceEnum, releaseDeviceEnum.toString());
+					} else {
+						console.log('deviceEnumPtr is null', deviceEnumPtr, deviceEnumPtr.toString());
+					}
 
 				break;
 			default:
 				console.error('Your os is not yet supported, your OS is: ' + core.os.mname);
 				throw new Error('Your os is not yet supported, your OS is: ' + core.os.mname);
 	}
+}
+
+function captureAudioToFile() {
+	switch (core.os.mname) {
+		case 'winnt':
+                var VARIANT_BSTR = ctypes.StructType('tagVARIANT', [
+                    { vt: ostypes.TYPE.VARTYPE },
+                    { wReserved1: ostypes.TYPE.WORD },
+                    { wReserved2: ostypes.TYPE.WORD },
+                    { wReserved3: ostypes.TYPE.WORD },
+                    { bstrVal: ostypes.TYPE.BSTR }
+                ]);
+
+                function createInst(type, clsid_desc, iid_desc) {
+                	// _desc is either string or arr
+                	// context is always CLSCTX_INPROC_SERVER
+                	var inst = ostypes.TYPE[type].ptr();
+                	var iface;
+
+                	var clsid = typeof(clsid_desc) == 'string' ? ostypes.HELPER.CLSIDFromString(clsid_desc) : ostypes.HELPER.CLSIDFromArr(clsid_desc);
+                	var iid = typeof(iid_desc) == 'string' ? ostypes.HELPER.CLSIDFromString(iid_desc) : ostypes.HELPER.CLSIDFromArr(iid_desc);
+
+                	var hr_create = ostypes.API('CoCreateInstance')(clsid.address(), null, ostypes.CONST.CLSCTX_INPROC_SERVER, iid.address(), inst.address());
+                	if (ostypes.checkHR(hr_create, 'creation - ' + type)) {
+                		iface = inst.contents.lpVtbl.contents;
+                		return { inst, iface };
+                	} else {
+                		return {};
+                	}
+                }
+
+                function releaseInst(inst, str) {
+                    if (inst && !inst.isNull()) {
+                        var ref_cnt = inst.contents.lpVtbl.contents.Release(inst);
+                        console.log(str + '->Release:', ref_cnt);
+                    }
+                }
+
+                // constants
+                var guid_desc = { // descriptions of guids, as either string or array that goes into ostypes.HELPER.CLISDFromArr or CLSIDFromString
+                    CLSID_SystemDeviceEnum: [0x62be5d10, 0x60eb, 0x11d0, [0xbd, 0x3b, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]],
+                    IID_ICreateDevEnum: '29840822-5B84-11D0-BD3B-00A0C911CE86',
+                    CLSID_FilterGraph: [0xe436ebb3, 0x524f, 0x11ce, [0x9f, 0x53, 0x00, 0x20, 0xaf, 0x0b, 0xa7, 0x70]],
+                    IID_IGraphBuilder: [0x56a868a9, 0x0ad4, 0x11ce, [0xb0, 0x3a, 0x00, 0x20, 0xaf, 0x0b, 0xa7, 0x70]],
+                    CLSID_SystemDeviceEnum: [0x62BE5D10, 0x60EB, 0x11d0, [0xBD, 0x3B, 0x00, 0xA0, 0xC9, 0x11, 0xCE, 0x86]],
+                    IID_ICreateDevEnum: [0x29840822, 0x5b84, 0x11d0, [0xbd, 0x3b, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]],
+                };
+                var IID_IMediaControl = ostypes.HELPER.CLSIDFromArr([0x56a868b1, 0x0ad4, 0x11ce, [0xb0, 0x3a, 0x00, 0x20, 0xaf, 0x0b, 0xa7, 0x70]]);
+                const BREAK = {};
+
+                try {
+                    var {iface:graph, inst:graphPtr} = createInst('IGraphBuilder', guid_desc.CLSID_FilterGraph, guid_desc.IID_IGraphBuilder);
+                    var {iface:deviceEnum, inst:devicEnumPtr} = createInst('ICreateDevEnum', guid_desc.CLSID_SystemDeviceEnum, guid_desc.IID_ICreateDevEnum);
+
+                    if (graph && deviceEnum) {
+                        var controlPtr = ostypes.TYPE.IMediaControl.ptr();
+                        var hr_qi = graph.QueryInterface(IID_IMediaControl.address(), controlPtr.address());
+                        if (ostypes.checkHR(hr_qi, 'hr_qi') === 1 && !controlPtr.isNull()) {
+                            var control = controlPtr.contents.lpVtbl.contents;
+
+
+                        }
+                    }
+                } catch (ex if ex != BREAK) {
+                    console.error('ERROR :: ', ex);
+                } finally {
+                    releaseInst(controlPtr, 'control');
+                    releaseInst(graphPtr, 'graph');
+                    realseInst(deviceEnumPtr, 'deviceEnum');
+                    releaseInst(filePtr, 'file');
+                }
+            break;
+        default:
+            console.error('Your os is not yet supported, your OS is: ' + core.os.mname);
+            throw new Error('Your os is not yet supported, your OS is: ' + core.os.mname);
+        }
+}
+
+function main() {
+    listAudio_InputAndRenderers();
 }
 
 function unmain() {
