@@ -97,9 +97,16 @@ function main() {
 					var VARIANT_BSTR = ctypes.StructType('tagVARIANT', [
 						{ vt: ostypes.TYPE.VARTYPE },
 						{ wReserved1: ostypes.TYPE.WORD },
-								{ wReserved2: ostypes.TYPE.WORD },
-						    	{ wReserved3: ostypes.TYPE.WORD },
+						{ wReserved2: ostypes.TYPE.WORD },
+			    	{ wReserved3: ostypes.TYPE.WORD },
 						{ bstrVal: ostypes.TYPE.BSTR }
+					]);
+          var VARIANT_LONG = ctypes.StructType('tagVARIANT', [
+						{ vt: ostypes.TYPE.VARTYPE },
+						{ wReserved1: ostypes.TYPE.WORD },
+						{ wReserved2: ostypes.TYPE.WORD },
+			    	{ wReserved3: ostypes.TYPE.WORD },
+						{ lVal: ostypes.TYPE.LONG }
 					]);
 					// ostypes.TYPE.VARIANT.define([
 					// 	{ vt: ostypes.TYPE.VARTYPE },
@@ -109,12 +116,12 @@ function main() {
 					// 	{ bstrVal: ostypes.TYPE.BSTR }
 					// ]);
 
-					var hr_CoInit = ostypes.API('CoInitializeEx')(null, ostypes.CONST.COINIT_APARTMENTTHREADED);
-					console.info('hr_CoInit:', hr_CoInit, hr_CoInit.toString(), uneval(hr_CoInit) ,ostypes.HELPER.getStrOfResult(hr_CoInit));
-					// ostypes.HELPER.checkHRESULT(hr_CoInit, 'CoInit') // cannot use this as it throws `SPECIAL HRESULT FAIL RESULT!!! HRESULT is 1!!! hr: Int64 {  } funcName: CoInit`
-					if (!ostypes.HELPER.checkHR(hr_CoInit, 'hr_CoInit')) {
-						throw new Error('Unexpected return value from CoInitializeEx: ' + hr);
-					}
+					// var hr_CoInit = ostypes.API('CoInitializeEx')(null, ostypes.CONST.COINIT_MULTITHREADED);
+					// console.info('hr_CoInit:', hr_CoInit, hr_CoInit.toString(), uneval(hr_CoInit) ,ostypes.HELPER.getStrOfResult(hr_CoInit));
+					// // ostypes.HELPER.checkHRESULT(hr_CoInit, 'CoInit') // cannot use this as it throws `SPECIAL HRESULT FAIL RESULT!!! HRESULT is 1!!! hr: Int64 {  } funcName: CoInit`
+					// if (!ostypes.HELPER.checkHR(hr_CoInit, 'hr_CoInit')) {
+					// 	throw new Error('Unexpected return value from CoInitializeEx: ' + hr_CoInit);
+					// }
 
 					var deviceEnumPtr;
 					var deviceEnum;
@@ -131,14 +138,18 @@ function main() {
 						var CLSID_AudioInputDeviceCategory = ostypes.HELPER.CLSIDFromArr([0x33d9a762, 0x90c8, 0x11d0, [0xbd, 0x43, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]])
 
 						var enumCatPtr = ostypes.TYPE.IEnumMoniker.ptr();
-					    var hr_enum = deviceEnum.CreateClassEnumerator(deviceEnumPtr, CLSID_AudioInputDeviceCategory.address(), enumCatPtr.address(), 0);
+					  var hr_enum = deviceEnum.CreateClassEnumerator(deviceEnumPtr, CLSID_AudioInputDeviceCategory.address(), enumCatPtr.address(), 0);
 						if (ostypes.HELPER.checkHR(hr_enum, 'hr_enum') === 1) {
 							var enumCat = enumCatPtr.contents.lpVtbl.contents;
 
 							var IID_IPropertyBag = ostypes.HELPER.CLSIDFromString('55272A00-42CB-11CE-8135-00AA004BB851');
 							var propBagPtr = ostypes.TYPE.IPropertyBag.ptr();
 							var fetched = ostypes.TYPE.ULONG();
+              var varName;
+              var devices = [];
 							while (true) {
+                var device_info = {};
+
 								// pickup as moniker
 								var devMonikPtr = ostypes.TYPE.IMoniker.ptr();
 								var devMonik = null;
@@ -155,20 +166,37 @@ function main() {
 								if (ostypes.HELPER.checkHR(hr_bind, 'hr_bind')) {
 									var propBag = propBagPtr.contents.lpVtbl.contents;
 
-									// Initialise the variant data type
-									var varName = ostypes.TYPE.VARIANT();
-									ostypes.API('VariantInit')(varName.address());
+                  // NEXT PROP
+                  if (!varName) {
+                    // Initialise the variant data type
+  									varName = ostypes.TYPE.VARIANT();
+  									ostypes.API('VariantInit')(varName.address());
+                  }
 
 									var hr_read = propBag.Read(propBagPtr, 'FriendlyName', varName.address(), null);
-									console.log('varName:', varName, varName.toString(), uneval(varName));
+									// console.log('varName:', varName, varName.toString(), uneval(varName));
 									varNameCast = ctypes.cast(varName.address(), VARIANT_BSTR.ptr).contents;
-									console.log('varNameCast:', varNameCast, varNameCast.toString(), uneval(varNameCast));
+									// console.log('varNameCast:', varNameCast, varNameCast.toString(), uneval(varNameCast));
 									if (ostypes.HELPER.checkHR(hr_read, 'hr_read')) {
-										console.log('varNameCast.bstrVal:', varNameCast.bstrVal.readString());
+										// console.log('FriendlyName:', 'varNameCast.bstrVal:', varNameCast.bstrVal.readString());
+
+                    device_info.FriendlyName = varNameCast.bstrVal.readString();
+
+                    //clear the variant data type
+  									ostypes.API('VariantClear')(varName.address());
 									}
 
-									//clear the variant data type
-									ostypes.API('VariantClear')(varName.address());
+                  // NEXT PROP
+									var hr_read = propBag.Read(propBagPtr, 'WaveInID', varName.address(), null);
+									varNameCast = ctypes.cast(varName.address(), VARIANT_LONG.ptr).contents;
+									if (ostypes.HELPER.checkHR(hr_read, 'hr_read')) {
+										// console.log('WaveInID:', 'varNameCast.lVal:', cutils.jscGetDeepest(varNameCast.lVal));
+
+                    device_info.WaveInID = cutils.jscGetDeepest(varNameCast.lVal);
+
+  									//clear the variant data type
+  									ostypes.API('VariantClear')(varName.address());
+									}
 
 									var releasePropBag = propBag.Release(propBagPtr); // release the properties
 									console.log('releasePropBag:', releasePropBag, releasePropBag.toString());
@@ -176,7 +204,10 @@ function main() {
 
 								var releaseDevMonik = devMonik.Release(devMonikPtr); // release Device moniker
 								console.log('releaseDevMonik:', releaseDevMonik, releaseDevMonik.toString());
+
+                devices.push(device_info);
 							}
+              console.log('devices:', devices);
 
 							var releaseEnumCat = enumCat.Release(enumCatPtr); // release category enumerator
 							console.log('releaseEnumCat:', releaseEnumCat, releaseEnumCat.toString());
@@ -191,8 +222,8 @@ function main() {
 							console.log('deviceEnumPtr is null', deviceEnumPtr, deviceEnumPtr.toString());
 						}
 						//if (shouldUninitialize) { // should always CoUninit even if CoInit returned false, per the docs on msdn
-							ostypes.API('CoUninitialize')(); // return void
-							console.log('did CoUnit');
+							// ostypes.API('CoUninitialize')(); // return void
+							// console.log('did CoUnit');
 						//}
 					// }
 
