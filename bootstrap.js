@@ -136,6 +136,7 @@ function main() {
 
 						// Enumerate the specified device, distinguished by DEVICE_CLSID such as CLSID_AudioInputDeviceCategory
 						var CLSID_AudioInputDeviceCategory = ostypes.HELPER.CLSIDFromArr([0x33d9a762, 0x90c8, 0x11d0, [0xbd, 0x43, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]])
+            var CLSID_AudioRendererCategory = ostypes.HELPER.CLSIDFromArr([0xe0f158e1, 0xcb04, 0x11d0, [0xbd, 0x4e, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]]);
 
 						var enumCatPtr = ostypes.TYPE.IEnumMoniker.ptr();
 					  var hr_enum = deviceEnum.CreateClassEnumerator(deviceEnumPtr, CLSID_AudioInputDeviceCategory.address(), enumCatPtr.address(), 0);
@@ -198,9 +199,25 @@ function main() {
   									ostypes.API('VariantClear')(varName.address());
 									}
 
+                  // NEXT PROP
+									var hr_read = propBag.Read(propBagPtr, 'CLSID', varName.address(), null);
+									varNameCast = ctypes.cast(varName.address(), VARIANT_BSTR.ptr).contents;
+									if (ostypes.HELPER.checkHR(hr_read, 'hr_read')) {
+										// console.log('CLSID:', 'varNameCast.bstrVal:', varNameCast.bstrVal.readString());
+
+                    device_info.CLSID = varNameCast.bstrVal.readString(); // is "{E30629D2-27E5-11CE-875D-00608CB78066}" without the quotes
+
+  									//clear the variant data type
+  									ostypes.API('VariantClear')(varName.address());
+									}
+
 									var releasePropBag = propBag.Release(propBagPtr); // release the properties
 									console.log('releasePropBag:', releasePropBag, releasePropBag.toString());
 								}
+
+                // var pCap =
+                // var IID_IBaseFilter = ostypes.HELPER.CLSIDFromArr([0x56A86895, 0x0AD4, 0x11CE, [0xB0, 0x3A, 0x00, 0x20, 0xAF, 0x0B, 0xA7, 0x70]]);
+                // var hr_base = devMonik.BindToObject(devMonikPtr, null, null, IID_IBaseFilter, pCap.address());
 
 								var releaseDevMonik = devMonik.Release(devMonikPtr); // release Device moniker
 								console.log('releaseDevMonik:', releaseDevMonik, releaseDevMonik.toString());
