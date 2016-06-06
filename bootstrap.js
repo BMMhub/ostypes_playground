@@ -241,20 +241,6 @@ function connectInputToOutput() {
                 	}
                 }
 
-                var ptrsReleased = [];
-                function releaseInst(inst, str) {
-                    if (inst && !inst.isNull()) {
-                        var inststr = inst.toString();
-                        if (ptrsReleased.indexOf(inststr) == -1) {
-                            ptrsReleased.push(inststr);
-                            var ref_cnt = inst.contents.lpVtbl.contents.Release(inst);
-                            console.log(str + '->Release:', ref_cnt, inststr);
-                        } else {
-                            console.log('already released', str, 'so will not release it again, inststr:', inststr);
-                        }
-                    }
-                }
-
                 function GUID_fromDesc(aGuidDesc) {
                     return typeof(aGuidDesc) == 'string' ? ostypes.HELPER.CLSIDFromString(aGuidDesc) : ostypes.HELPER.CLSIDFromArr(aGuidDesc);
                 }
@@ -310,7 +296,7 @@ function connectInputToOutput() {
                                 inst: pinPtr
                             };
                         }
-                        releaseInst(pinPtr, 'pin');
+                        ostypes.HELPER.SafeRelease(pinPtr, 'pin');
                     }
 
                     console.log('pins:', pins);
@@ -402,20 +388,20 @@ function connectInputToOutput() {
             									ostypes.API('VariantClear')(varName.address());
             								}
 
-            								releaseInst(propBagPtr, 'propBag');
+            								ostypes.HELPER.SafeRelease(propBagPtr, 'propBag');
             							}
 
                                         Object.assign(device_info, { devMonik, devMonikPtr, put });
-                                        // releaseInst(devMonikPtr, 'devMonik'); // dont release yet, this will be done after user has picked link33
+                                        // ostypes.HELPER.SafeRelease(devMonikPtr, 'devMonik'); // dont release yet, this will be done after user has picked link33
 
                                         devices.push(device_info);
             						}
 
-            						releaseInst(catEnumPtr, 'catEnum');
+            						ostypes.HELPER.SafeRelease(catEnumPtr, 'catEnum');
             					}
                             }
 
-                            releaseInst(deviceEnumPtr, 'deviceEnum');
+                            ostypes.HELPER.SafeRelease(deviceEnumPtr, 'deviceEnum');
 
                             // used in both the prompt sections
                             var IID_IBaseFilter = GUID_fromDesc(guid_desc.IID_IBaseFilter);
@@ -493,7 +479,7 @@ function connectInputToOutput() {
                             for (var i=0; i<devices.length; i++) {
                                 var { selected, devMonikPtr } = devices[i];
                                 if (!selected) {
-                                    releaseInst(devMonikPtr);
+                                    ostypes.HELPER.SafeRelease(devMonikPtr);
                                 }
                             }
 
@@ -552,7 +538,7 @@ function connectInputToOutput() {
                     console.error('ERROR :: ', ex);
                 } finally {
                     // if graph is running, then will not do clean up till after 10 seconds, otherwise it will clean up in 10ms
-                    var isRunning = [1, -1].includes(ostypes.HELPER.checkHR(hr_run));
+                    var isRunning = [1, -1].includes(ostypes.HELPER.checkHR(hr_run)); // checkHR accepts undefined, it will just return undefined
                     xpcomSetTimeout(undefined, isRunning ? 10000 : 10, function() {
                         if (isRunning) {
                             // means graph is running, so stop it
@@ -572,22 +558,22 @@ function connectInputToOutput() {
                         if (devices) {
                             for (var i=0; i<devices.length; i++) {
                                 var { devMonkPtr } = devices[i];
-                                releaseInst(devMonikPtr); // if devMonikPtr is undefined, this will do nothing
+                                ostypes.HELPER.SafeRelease(devMonikPtr); // if devMonikPtr is undefined, this will do nothing
                             }
                         }
-                        releaseInst(inputDevPtr, 'inputDev');
-                        releaseInst(outputDevPtr, 'outputDev');
-                        releaseInst(controlPtr, 'control');
-                        releaseInst(graphPtr, 'graph');
-                        try { releaseInst(deviceEnumPtr, 'deviceEnum'); } catch(ignore) { console.warn('error releasing deviceEnumPtr:', ignore); }
-                        try { releaseInst(filePtr, 'file'); } catch(ignore) { console.warn('error releasing filePtr:', ignore); }
-                        try { releaseInst(catEnumPtr, 'catEnum'); } catch(ignore) { console.warn('error releasing catEnumPtr:', ignore); }
+                        ostypes.HELPER.SafeRelease(inputDevPtr, 'inputDev');
+                        ostypes.HELPER.SafeRelease(outputDevPtr, 'outputDev');
+                        ostypes.HELPER.SafeRelease(controlPtr, 'control');
+                        ostypes.HELPER.SafeRelease(graphPtr, 'graph');
+                        try { ostypes.HELPER.SafeRelease(deviceEnumPtr, 'deviceEnum'); } catch(ignore) { console.warn('error releasing deviceEnumPtr:', ignore); }
+                        try { ostypes.HELPER.SafeRelease(filePtr, 'file'); } catch(ignore) { console.warn('error releasing filePtr:', ignore); }
+                        try { ostypes.HELPER.SafeRelease(catEnumPtr, 'catEnum'); } catch(ignore) { console.warn('error releasing catEnumPtr:', ignore); }
 
                         // not sure when to release these, it seems this guy never did:
-                        try { releaseInst(inputPinsPtr, 'inputPins'); } catch(ignore) { console.warn('error releasing inputPinsPtr:', ignore); }
-                        try { releaseInst(inPinPtr, 'inPin'); } catch(ignore) { console.warn('error releasing inPinPtr:', ignore); }
-                        try { releaseInst(outputPinsPtr, 'outputPins'); } catch(ignore) { console.warn('error releasing outputPinsPtr:', ignore); }
-                        try { releaseInst(outPinPtr, 'outPin'); } catch(ignore) { console.warn('error releasing outPinPtr:', ignore); }
+                        try { ostypes.HELPER.SafeRelease(inputPinsPtr, 'inputPins'); } catch(ignore) { console.warn('error releasing inputPinsPtr:', ignore); }
+                        try { ostypes.HELPER.SafeRelease(inPinPtr, 'inPin'); } catch(ignore) { console.warn('error releasing inPinPtr:', ignore); }
+                        try { ostypes.HELPER.SafeRelease(outputPinsPtr, 'outputPins'); } catch(ignore) { console.warn('error releasing outputPinsPtr:', ignore); }
+                        try { ostypes.HELPER.SafeRelease(outPinPtr, 'outPin'); } catch(ignore) { console.warn('error releasing outPinPtr:', ignore); }
                     });
                 }
             break;
