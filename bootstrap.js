@@ -535,10 +535,8 @@ function connectInputToOutput() {
                             //     throw BREAK;
                             // }
 
-                            console.error('debug'); throw BREAK;
-
-                            // connect them
-                            var hr_connect = pIn.Connect(pInPtr, pOut, null);
+                            // Connect the input pin to output pin
+                            var hr_connect = inPin.Connect(inPinPtr, outPinPtr, null);
                             if (ostypes.HELPER.checkHR(hr_connect, 'hr_connect') !== 1) {
                                 throw BREAK;
                             }
@@ -554,7 +552,7 @@ function connectInputToOutput() {
                     console.error('ERROR :: ', ex);
                 } finally {
                     // if graph is running, then will not do clean up till after 10 seconds, otherwise it will clean up in 10ms
-                    var isRunning = (ostypes.HELPER.checkHR(hr_run) === 1);
+                    var isRunning = true; // (ostypes.HELPER.checkHR(hr_run) === 1);
                     xpcomSetTimeout(undefined, isRunning ? 10000 : 10, function() {
                         if (isRunning) {
                             // means graph is running, so stop it
@@ -562,7 +560,7 @@ function connectInputToOutput() {
                             ostypes.HELPER.checkHR(hr_stop, 'hr_stop');
                         }
                         // if connected should we disconnect?
-                        if (ostypes.HELPER.checkHR(hr_run) === 1) {
+                        if (ostypes.HELPER.checkHR(hr_connect) === 1) {
                             // TODO: its connected, should i disconnect? for now i do disconnect them
                             // TODO: figure out how to use graph.Disconnect
                             // msdn docs say dont do it this way --> // var hr_disconnect = pIn.Disconnect(pInPtr, pOut, null); // The Filter Graph Manager calls this method when it disconnects two filters. Applications and filters should not call this method. Instead, call the IFilterGraph::Disconnect method on the Filter Graph Manager.
