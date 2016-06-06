@@ -543,7 +543,7 @@ function connectInputToOutput() {
 
                             // now run the graph
                             var hr_run = control.Run(controlPtr);
-                            if (ostypes.HELPER.checkHR(hr_run, 'hr_run') !== 1) {
+                            if (ostypes.HELPER.checkHR(hr_run, 'hr_run') === 0) {
                                 throw BREAK;
                             }
                         }
@@ -552,7 +552,7 @@ function connectInputToOutput() {
                     console.error('ERROR :: ', ex);
                 } finally {
                     // if graph is running, then will not do clean up till after 10 seconds, otherwise it will clean up in 10ms
-                    var isRunning = true; // (ostypes.HELPER.checkHR(hr_run) === 1);
+                    var isRunning = [1, -1].includes(ostypes.HELPER.checkHR(hr_run));
                     xpcomSetTimeout(undefined, isRunning ? 10000 : 10, function() {
                         if (isRunning) {
                             // means graph is running, so stop it
