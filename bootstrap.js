@@ -258,6 +258,66 @@ function connectInputToOutput() {
                 function GUID_fromDesc(aGuidDesc) {
                     return typeof(aGuidDesc) == 'string' ? ostypes.HELPER.CLSIDFromString(aGuidDesc) : ostypes.HELPER.CLSIDFromArr(aGuidDesc);
                 }
+
+                function findFirstPinOfDir(aPinsInst, aDir) {
+                    // aPinsInst is ptr to ostypes.TYPE.IEnumPins
+                    // if found, it will NOT release it, you need to release it, it returns an object with iface and inst
+                    // else it returns empty object
+
+                    // list the pins, as this is input, we want one with direction of in
+                    var aPinsIface = aPinsInst.contents.lpVtbl.contents;
+
+                    var pins = [];
+                    while(true) {
+                        var pin_info = {};
+
+                        var pinPtr = ostypes.TYPE.IPin.ptr();
+                        var pin = null;
+                        var hr_nextPin = aPinsIface.Next(aPinsInst, 1, pinPtr.address(), null);
+                        if (ostypes.HELPER.checkHR(hr_nextPin, 'hr_nextPin') !== 1) {
+                            console.log('no more pins, breaking');
+                            break;
+                        }
+                        pin = pinPtr.contents.lpVtbl.contents;
+
+                        // var pinId = ostypes.TYPE.LPWSTR(); // .targetType.array(ostypes.CONST.MAX_PIN_NAME)();
+                        // var hr_pinId = pin.QueryId(pinPtr, pinId.address());
+                        // if (ostypes.HELPER.checkHR(hr_pinId, 'hr_pinId') !== 1) {
+                        //     console.warn('no id for this pin, i dont know if this is possible');
+                        // } else {
+                        //     var pinIdCasted = ctypes.cast(pinId, ostypes.TYPE.WCHAR.array(ostypes.CONST.MAX_PIN_NAME).ptr).contents;
+                        //     var pinIdJs = pinIdCasted.readString();
+                        //     pin_info.id = pinIdJs;
+                        //     // console.log('pinIdJs:', pinIdJs);
+                        //     ostypes.API('CoTaskMemFree')(pinId);
+                        // }
+
+                        var pinDir = ostypes.TYPE.PIN_DIRECTION();
+                        var hr_pinDir = pin.QueryDirection(pinPtr, pinDir.address());
+                        if (ostypes.HELPER.checkHR(hr_pinDir, 'hr_pinDir') !== 1) {
+                            console.warn('no dir for this pin, i dont know if this is possible');
+                        } else {
+                            var pinDirJs = parseInt(cutils.jscGetDeepest(pinDir));
+                            pin_info.dir = pinDirJs;
+                            // console.log('pinDirJs:', pinDirJs);
+                        }
+
+                        pins.push(pin_info);
+
+                        if (pin_info.dir == aDir) {
+                            return {
+                                iface: pin,
+                                inst: pinPtr
+                            };
+                        }
+                        releaseInst(pinPtr, 'pin');
+                    }
+
+                    console.log('pins:', pins);
+                    console.error('ERROR - pin with direction', aDir, 'not found!');
+                    return {};
+                }
+
                 // constants
                 var guid_desc = { // descriptions of guids, as either string or array that goes into ostypes.HELPER.CLISDFromArr or CLSIDFromString
                     CLSID_SystemDeviceEnum: [0x62be5d10, 0x60eb, 0x11d0, [0xbd, 0x3b, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]],
@@ -382,11 +442,16 @@ function connectInputToOutput() {
                             device.selected = true;
                             var inputDevPtr = ostypes.TYPE.IBaseFilter.ptr();
                             var hr_initDevice = device.devMonik.BindToObject(device.devMonikPtr, null, null, IID_IBaseFilter.address(), inputDevPtr.address()); // Instantiate the device
-                            if (ostypes.HELPER.checkHR(hr_initDevice, 'hr_initDevice') !== 1) {
+                            if (ostypes.HELPER.checkHR(hr_initDevice, 'hr_initDevice input') !== 1) {
                                 throw BREAK;
                             }
+                            var inputDev = inputDevPtr.contents.lpVtbl.contents;
+
                             // also add it to the graph
                             var hr_add = graph.AddFilter(graphPtr, inputDevPtr, device.FriendlyName);
+                            if (ostypes.HELPER.checkHR(hr_add, 'hr_add input') !== 1) {
+                                throw BREAK;
+                            }
                             // TODO: GC question, i dont use inputDevPtr/inputDev anymore (i dont think, another todo here, verify this), can I release it and GC it?
 
                             // prompt user to pick output device or quit
@@ -411,11 +476,16 @@ function connectInputToOutput() {
                             device.selected = true;
                             var outputDevPtr = ostypes.TYPE.IBaseFilter.ptr();
                             var hr_initDevice = device.devMonik.BindToObject(device.devMonikPtr, null, null, IID_IBaseFilter.address(), outputDevPtr.address()); // Instantiate the device
-                            if (ostypes.HELPER.checkHR(hr_initDevice, 'hr_initDevice') !== 1) {
+                            if (ostypes.HELPER.checkHR(hr_initDevice, 'hr_initDevice output') !== 1) {
                                 throw BREAK;
                             }
+                            var outputDev = outputDevPtr.contents.lpVtbl.contents;
+
                             // also add it to the graph
                             var hr_add = graph.AddFilter(graphPtr, outputDevPtr, device.FriendlyName);
+                            if (ostypes.HELPER.checkHR(hr_add, 'hr_add output') !== 1) {
+                                throw BREAK;
+                            }
                             // TODO: GC question, i dont use outputDevPtr/outputDev anymore (i dont think, another todo here, verify this), can I release it and GC it?
 
                             // release the entries from devices that were not selected, so delete devMonik and devMonikPtr from the entry afterwards, leave the name and clsid though for display puproses // link33
@@ -429,29 +499,43 @@ function connectInputToOutput() {
 
                             // get input pins for connection
                             var inputPinsPtr = ostypes.TYPE.IEnumPins.ptr();
-                            var hr_enumPins = inputDev.EnumPins(inputDevPtr, inputPinsPtr); // Enumerate the pin
+                            var hr_enumPins = inputDev.EnumPins(inputDevPtr, inputPinsPtr.address()); // Enumerate the pin
                             if (ostypes.HELPER.checkHR(hr_enumPins, 'hr_enumPins input') !== 1) {
                                 throw BREAK;
                             }
+                            var inputPins = inputPinsPtr.contents.lpVtbl.contents;
 
-                            var inPinPtr = ostypes.TYPE.IPin.ptr()
-                            var hr_findPin = inputDev.FindPin(inputDevPtr, 'Capture', inPinPtr); // Enumerate the pin
-                            if (ostypes.HELPER.checkHR(hr_findPin, 'hr_findPin input') !== 1) {
+                            var { inst:inPinPtr, iface:inPin } = findFirstPinOfDir(inputPinsPtr, ostypes.CONST.PINDIR_OUTPUT);
+                            if (!inPinPtr) {
                                 throw BREAK;
                             }
+
+                            // var inPinPtr = ostypes.TYPE.IPin.ptr()
+                            // var hr_findPin = inputDev.FindPin(inputDevPtr, 'Capture', inPinPtr.address()); // Enumerate the pin
+                            // if (ostypes.HELPER.checkHR(hr_findPin, 'hr_findPin input') !== 1) {
+                            //     throw BREAK;
+                            // }
 
                             // get output pins for connection
                             var outputPinsPtr = ostypes.TYPE.IEnumPins.ptr();
-                            var hr_enumPins = outputDev.EnumPins(outputDevPtr, outputPinsPtr); // Enumerate the pin
+                            var hr_enumPins = outputDev.EnumPins(outputDevPtr, outputPinsPtr.address()); // Enumerate the pin
                             if (ostypes.HELPER.checkHR(hr_enumPins, 'hr_enumPins output') !== 1) {
                                 throw BREAK;
                             }
+                            var outputPins = outputPinsPtr.contents.lpVtbl.contents;
 
-                            var outPinPtr = ostypes.TYPE.IPin.ptr()
-                            var hr_findPin = outputDev.FindPin(outputDevPtr, 'Capture', outPinPtr); // Enumerate the pin
-                            if (ostypes.HELPER.checkHR(hr_findPin, 'hr_findPin output') !== 1) {
+                            var { inst:outPinPtr, iface:outPin } = findFirstPinOfDir(outputPinsPtr, ostypes.CONST.PINDIR_INPUT);
+                            if (!outPinPtr) {
                                 throw BREAK;
                             }
+
+                            // var outPinPtr = ostypes.TYPE.IPin.ptr()
+                            // var hr_findPin = outputDev.FindPin(outputDevPtr, 'Capture', outPinPtr.address()); // Enumerate the pin
+                            // if (ostypes.HELPER.checkHR(hr_findPin, 'hr_findPin output') !== 1) {
+                            //     throw BREAK;
+                            // }
+
+                            console.error('debug'); throw BREAK;
 
                             // connect them
                             var hr_connect = pIn.Connect(pInPtr, pOut, null);
