@@ -229,8 +229,8 @@ function captureAudioToFile() {
                 	var inst = ostypes.TYPE[type].ptr();
                 	var iface;
 
-                	var clsid = typeof(clsid_desc) == 'string' ? ostypes.HELPER.CLSIDFromString(clsid_desc) : ostypes.HELPER.CLSIDFromArr(clsid_desc);
-                	var iid = typeof(iid_desc) == 'string' ? ostypes.HELPER.CLSIDFromString(iid_desc) : ostypes.HELPER.CLSIDFromArr(iid_desc);
+                	var clsid = GUID_fromDesc(clsid_desc);
+                	var iid = GUID_fromDesc(iid_desc);
 
                 	var hr_create = ostypes.API('CoCreateInstance')(clsid.address(), null, ostypes.CONST.CLSCTX_INPROC_SERVER, iid.address(), inst.address());
                 	if (ostypes.checkHR(hr_create, 'creation - ' + type)) {
@@ -248,6 +248,9 @@ function captureAudioToFile() {
                     }
                 }
 
+                function GUID_fromDesc(aGuidDesc) {
+                    return typeof(aGuidDesc) == 'string' ? ostypes.HELPER.CLSIDFromString(aGuidDesc) : ostypes.HELPER.CLSIDFromArr(aGuidDesc);
+                }
                 // constants
                 var guid_desc = { // descriptions of guids, as either string or array that goes into ostypes.HELPER.CLISDFromArr or CLSIDFromString
                     CLSID_SystemDeviceEnum: [0x62be5d10, 0x60eb, 0x11d0, [0xbd, 0x3b, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]],
@@ -256,6 +259,8 @@ function captureAudioToFile() {
                     IID_IGraphBuilder: [0x56a868a9, 0x0ad4, 0x11ce, [0xb0, 0x3a, 0x00, 0x20, 0xaf, 0x0b, 0xa7, 0x70]],
                     CLSID_SystemDeviceEnum: [0x62BE5D10, 0x60EB, 0x11d0, [0xBD, 0x3B, 0x00, 0xA0, 0xC9, 0x11, 0xCE, 0x86]],
                     IID_ICreateDevEnum: [0x29840822, 0x5b84, 0x11d0, [0xbd, 0x3b, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]],
+                    CLSID_AudioInputDeviceCategory: [0x33d9a762, 0x90c8, 0x11d0, [0xbd, 0x43, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]],
+                    CLSID_AudioRendererCategory: [0xe0f158e1, 0xcb04, 0x11d0, [0xbd, 0x4e, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]]
                 };
                 var IID_IMediaControl = ostypes.HELPER.CLSIDFromArr([0x56a868b1, 0x0ad4, 0x11ce, [0xb0, 0x3a, 0x00, 0x20, 0xaf, 0x0b, 0xa7, 0x70]]);
                 const BREAK = {};
@@ -264,22 +269,232 @@ function captureAudioToFile() {
                     var {iface:graph, inst:graphPtr} = createInst('IGraphBuilder', guid_desc.CLSID_FilterGraph, guid_desc.IID_IGraphBuilder);
                     var {iface:deviceEnum, inst:devicEnumPtr} = createInst('ICreateDevEnum', guid_desc.CLSID_SystemDeviceEnum, guid_desc.IID_ICreateDevEnum);
 
-                    if (graph && deviceEnum) {
+                    if (graph && deviceEnum) { // no need for !.isNull() test as if hr was FAILED then createInst would set these to undefined
                         var controlPtr = ostypes.TYPE.IMediaControl.ptr();
                         var hr_qi = graph.QueryInterface(IID_IMediaControl.address(), controlPtr.address());
-                        if (ostypes.checkHR(hr_qi, 'hr_qi') === 1 && !controlPtr.isNull()) {
+                        if (ostypes.checkHR(hr_qi, 'hr_qi') === 1) { // no need -  && !controlPtr.isNull() as hr was SUCCEEDED
                             var control = controlPtr.contents.lpVtbl.contents;
 
+                            // get list input/output devices
+                            var devices = []; // entries are objects {FriendlyName:string, CLSID:string, put:string, devMonk:cdata, devMonikPtr:cdata} // put is INPUT or OUTPUT
 
+                            var categories = [GUID_fromDesc(CLSID_AudioInputDeviceCategory), GUID_fromDesc(CLSID_AudioRendererCategory)];
+                            var varName;
+
+                            for (var i=0; i<categories.length; i++) {
+                                var category = categories[i];
+                                var put = i === 0 ? 'INPUT' : 'OUTPUT';
+                                var catEnumPtr = ostypes.TYPE.IEnumMoniker.ptr();
+                				var hr_enum = deviceEnum.CreateClassEnumerator(deviceEnumPtr, category.address(), catEnumPtr.address(), 0);
+            					if (ostypes.HELPER.checkHR(hr_enum, 'hr_enum') === 1) {
+            						var catEnum = catEnumPtr.contents.lpVtbl.contents;
+
+                                    while (true) {
+                                        var device_info = {};
+
+            							// pickup as moniker
+            							var devMonikPtr = ostypes.TYPE.IMoniker.ptr();
+            							var devMonik = null;
+            							var hr_nextDev = catEnum.Next(catEnumPtr, 1, devMonikPtr.address(), null);
+            							if (ostypes.HELPER.checkHR(hr_nextDev, 'hr_nextDev') !== 1) {
+            								// when fetched is 0, we get hr_nextDev of `1` which is "did not succeed but did not fail", so checkHR returns -1
+                                            console.log('no more devices in this category, breaking');
+            								break;
+            							}
+            							devMonik = devMonikPtr.contents.lpVtbl.contents;
+
+            							// bind the properties of the moniker
+                                        var propBagPtr = ostypes.TYPE.IPropertyBag.ptr();
+            							var hr_bind = devMonik.BindToStorage(devMonikPtr, null, null, IID_IPropertyBag.address(), propBagPtr.address());
+            							if (ostypes.HELPER.checkHR(hr_bind, 'hr_bind')) {
+            								var propBag = propBagPtr.contents.lpVtbl.contents;
+
+                                            if (!varName) {
+                                                // Initialise the variant data type
+                                                varName = ostypes.TYPE.VARIANT();
+                                                ostypes.API('VariantInit')(varName.address());
+                                            }
+
+                                            // get FriendlyName
+            								var hr_read = propBag.Read(propBagPtr, 'FriendlyName', varName.address(), null);
+            								if (ostypes.HELPER.checkHR(hr_read, 'hr_read')) {
+                                                varNameCast = ctypes.cast(varName.address(), VARIANT_BSTR.ptr).contents;
+            									// console.log('FriendlyName:', 'varNameCast.bstrVal:', varNameCast.bstrVal.readString());
+                                                device_info.FriendlyName = varNameCast.bstrVal.readString();
+            									ostypes.API('VariantClear')(varName.address());
+            								}
+
+                                            // get CLSID
+            								var hr_read = propBag.Read(propBagPtr, 'CLSID', varName.address(), null);
+            								if (ostypes.HELPER.checkHR(hr_read, 'hr_read')) {
+                                                varNameCast = ctypes.cast(varName.address(), VARIANT_BSTR.ptr).contents;
+            									// console.log('CLSID:', 'varNameCast.bstrVal:', varNameCast.bstrVal.readString());
+                                                device_info.CLSID = varNameCast.bstrVal.readString(); // is "{E30629D2-27E5-11CE-875D-00608CB78066}" without the quotes
+            									ostypes.API('VariantClear')(varName.address());
+            								}
+
+            								releaseInst(propBagPtr, 'propBag');
+            							}
+
+                                        Object.assign(device_info, { devMonik, devMonikPtr, put });
+                                        // releaseInst(devMonikPtr, 'devMonik'); // dont release yet, this will be done after user has picked link33
+
+                                        devices.push(device_info);
+            						}
+
+            						realseInst(catEnumPtr, 'catEnum');
+            					}
+                            }
+
+                            realseInst(deviceEnumPtr, 'deviceEnum');
+
+                            // used in both the prompt sections
+                            var IID_IBaseFilter = GUID_fromDesc(clsid_desc.IID_IBaseFilter);
+
+                            // prompt user to pick input device or quit
+                            var items = devices.filter(function(device) { return device.put == 'INPUT' });
+                            items = items.map(function(item) { return '"' + item.FriendlyName + '" ------- ' + item.CLSID });
+                            var selected = {};
+                            var result = Services.prompt.select(Services.wm.getMostRecentWindow('navigator:browser'), 'Select Device', 'Choose input device:', items.length, items, selected);
+
+                            if (!result || selected.value == -1) {
+                                // user cancelled, or there were no items to pick from
+                                throw BREAK;
+                            }
+
+                            var clsid = items[selected.value].split(' ------- ')[1];
+                            for (var device of devices) {
+                                if (device.CLSID == clsid) {
+                                    break;
+                                }
+                            }
+
+                            // user picked something. set it as pInputDevice which is IBaseFilter
+                            device.selected = true;
+                            var inputDevPtr = ostypes.TYPE.IBaseFilter.ptr();
+                            var hr_initDevice = device.devMonik.BindToObject(device.devMonikPtr, null, null, IID_IBaseFilter.address(), inputDevPtr.address()); // Instantiate the device
+                            if (ostypes.HELPER.checkHR(hr_initDevice, 'hr_initDevice') !== 1) {
+                                throw BREAK;
+                            }
+                            // also add it to the graph
+                            var hr_add = graph.AddFilter(graphPtr, inputDevPtr, device.FriendlyName);
+                            // TODO: GC question, i dont use inputDevPtr/inputDev anymore (i dont think, another todo here, verify this), can I release it and GC it?
+
+                            // prompt user to pick output device or quit
+                            var items = devices.filter(function(device) { return device.put == 'OUTPUT' });
+                            items = items.map(function(item) { return '"' + item.FriendlyName + '" ------- ' + item.CLSID });
+                            var selected = {};
+                            var result = Services.prompt.select(Services.wm.getMostRecentWindow('navigator:browser'), 'Select Device', 'Choose input device:', items.length, items, selected);
+
+                            if (!result || selected.value == -1) {
+                                // user cancelled, or there were no items to pick from
+                                throw BREAK;
+                            }
+
+                            var clsid = items[selected.value].split(' ------- ')[1];
+                            for (var device of devices) {
+                                if (device.CLSID == clsid) {
+                                    break;
+                                }
+                            }
+
+                            // user picked something. set it as pOutputDevice which is IBaseFilter
+                            device.selected = true;
+                            var outputDevPtr = ostypes.TYPE.IBaseFilter.ptr();
+                            var hr_initDevice = device.devMonik.BindToObject(device.devMonikPtr, null, null, IID_IBaseFilter.address(), outputDevPtr.address()); // Instantiate the device
+                            if (ostypes.HELPER.checkHR(hr_initDevice, 'hr_initDevice') !== 1) {
+                                throw BREAK;
+                            }
+                            // also add it to the graph
+                            var hr_add = graph.AddFilter(graphPtr, outputDevPtr, device.FriendlyName);
+                            // TODO: GC question, i dont use outputDevPtr/outputDev anymore (i dont think, another todo here, verify this), can I release it and GC it?
+
+                            // release the entries from devices that were not selected, so delete devMonik and devMonikPtr from the entry afterwards, leave the name and clsid though for display puproses // link33
+                            // TODO: figure out if i can release the devMonik/devMonikPtr of the seelcted devices. I dont use the monik anymore, i use the IBaseFilter inputDev/inputDevPtr and outputDev/outputDevPtr - my concern is these inputDev/outputDev is based on the devMonik of it, GC question, will figure out as i use it and research online, can force test it by releasing it and see if crash happens
+                            for (var i=0; i<devices.length; i++) {
+                                var { selected, devMonikPtr } = devices[i];
+                                if (!selected) {
+                                    releaseInst(devMonikPtr);
+                                }
+                            }
+
+                            // get input pins for connection
+                            var inputPinsPtr = ostypes.TYPE.IEnumPins.ptr();
+                            var hr_enumPins = inputDev.EnumPins(inputDevPtr, inputPinsPtr); // Enumerate the pin
+                            if (ostypes.HELPER.checkHR(hr_enumPins, 'hr_enumPins input') !== 1) {
+                                throw BREAK;
+                            }
+
+                            var inPinPtr = ostypes.TYPE.IPin.ptr()
+                            var hr_findPin = inputDev.FindPin(inputDevPtr, 'Capture', inPinPtr); // Enumerate the pin
+                            if (ostypes.HELPER.checkHR(hr_findPin, 'hr_findPin input') !== 1) {
+                                throw BREAK;
+                            }
+
+                            // get output pins for connection
+                            var outputPinsPtr = ostypes.TYPE.IEnumPins.ptr();
+                            var hr_enumPins = outputDev.EnumPins(outputDevPtr, outputPinsPtr); // Enumerate the pin
+                            if (ostypes.HELPER.checkHR(hr_enumPins, 'hr_enumPins output') !== 1) {
+                                throw BREAK;
+                            }
+
+                            var outPinPtr = ostypes.TYPE.IPin.ptr()
+                            var hr_findPin = outputDev.FindPin(outputDevPtr, 'Capture', outPinPtr); // Enumerate the pin
+                            if (ostypes.HELPER.checkHR(hr_findPin, 'hr_findPin output') !== 1) {
+                                throw BREAK;
+                            }
+
+                            // connect them
+                            var hr_connect = pIn.Connect(pInPtr, pOut, null);
+                            if (ostypes.HELPER.checkHR(hr_connect, 'hr_connect') !== 1) {
+                                throw BREAK;
+                            }
+
+                            // now run the graph
+                            var hr_run = control.Run(controlPtr);
+                            if (ostypes.HELPER.checkHR(hr_run, 'hr_run') !== 1) {
+                                throw BREAK;
+                            }
                         }
                     }
                 } catch (ex if ex != BREAK) {
                     console.error('ERROR :: ', ex);
                 } finally {
-                    releaseInst(controlPtr, 'control');
-                    releaseInst(graphPtr, 'graph');
-                    realseInst(deviceEnumPtr, 'deviceEnum');
-                    releaseInst(filePtr, 'file');
+                    // if graph is running, then will not do clean up till after 10 seconds, otherwise it will clean up in 10ms
+                    var isRunning = (ostypes.HELPER.checkHR(hr_run) === 1);
+                    xpcomSetTimeout(undefined, isRunning ? 10000 : 10, function() {
+                        if (isRunning) {
+                            // means graph is running, so stop it
+                            var hr_stop = control.Stop(controlPtr);
+                            ostypes.HELPER.checkHR(hr_stop, 'hr_stop');
+                        }
+                        // if connected should we disconnect?
+                        if (ostypes.HELPER.checkHR(hr_run) === 1) {
+                            // its connected, should i disconnect?
+                            var hr_disconnect = pIn.Disconnect(pInPtr, pOut, null);
+                            if (ostypes.HELPER.checkHR(hr_disconnect, 'hr_disconnect') !== 1) {
+                                throw BREAK;
+                            }
+                        }
+                        if (devices) {
+                            for (var i=0; i<devices.length; i++) {
+                                var { devMonkPtr } = devices[i];
+                                releaseInst(devMonikPtr); // if devMonikPtr is undefined, this will do nothing
+                            }
+                        }
+                        releaseInst(inputDevPtr, 'inputDev');
+                        releaseInst(outputDevPtr, 'outputDev');
+                        releaseInst(controlPtr, 'control');
+                        releaseInst(graphPtr, 'graph');
+                        realseInst(deviceEnumPtr, 'deviceEnum');
+                        releaseInst(filePtr, 'file');
+
+                        // not sure when to release these, it seems this guy never did:
+                        relaseInst(inputPinsPtr, 'inputPins');
+                        relaseInst(inPinPtr, 'inPin');
+                        relaseInst(outputPinsPtr, 'outputPins');
+                        relaseInst(outPinPtr, 'outPin');
+                    });
                 }
             break;
         default:
@@ -313,10 +528,23 @@ function shutdown(aData, aReason) {
 }
 
 // start - common helper functions
+var gTempTimers = {}; // hold temporary timers, when first arg is not set for xpcomSetTimeout
 function xpcomSetTimeout(aNsiTimer, aDelayTimerMS, aTimerCallback) {
-	aNsiTimer.initWithCallback({
+    var timer;
+    if (!aNsiTimer) {
+        var timerid = Date.now();
+        gTempTimers[timerid] = Cc['@mozilla.org/timer;1'].createInstance(Ci.nsITimer);
+        timer = gTempTimers[timerid];
+    } else {
+        timer = aNsiTimer;
+    }
+
+	timer.initWithCallback({
 		notify: function() {
 			aTimerCallback();
+            if (!aNsiTimer) {
+                delete gTempTimers[timerid];
+            }
 		}
 	}, aDelayTimerMS, Ci.nsITimer.TYPE_ONE_SHOT);
 }
