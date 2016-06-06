@@ -245,10 +245,10 @@ function connectInputToOutput() {
                 function releaseInst(inst, str) {
                     if (inst && !inst.isNull()) {
                         var inststr = inst.toString();
-                        ptrsReleased.push(inststr);
                         if (ptrsReleased.indexOf(inststr) == -1) {
+                            ptrsReleased.push(inststr);
                             var ref_cnt = inst.contents.lpVtbl.contents.Release(inst);
-                            console.log(str + '->Release:', ref_cnt);
+                            console.log(str + '->Release:', ref_cnt, inststr);
                         } else {
                             console.log('already released', str, 'so will not release it again, inststr:', inststr);
                         }
@@ -346,7 +346,7 @@ function connectInputToOutput() {
             							}
 
                                         Object.assign(device_info, { devMonik, devMonikPtr, put });
-                                        releaseInst(devMonikPtr, 'devMonik'); // dont release yet, this will be done after user has picked link33
+                                        // releaseInst(devMonikPtr, 'devMonik'); // dont release yet, this will be done after user has picked link33
 
                                         devices.push(device_info);
             						}
