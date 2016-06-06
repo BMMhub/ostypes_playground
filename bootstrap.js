@@ -241,10 +241,17 @@ function connectInputToOutput() {
                 	}
                 }
 
+                var ptrsReleased = [];
                 function releaseInst(inst, str) {
                     if (inst && !inst.isNull()) {
-                        var ref_cnt = inst.contents.lpVtbl.contents.Release(inst);
-                        console.log(str + '->Release:', ref_cnt);
+                        var inststr = inst.toString();
+                        ptrsReleased.push(inststr);
+                        if (ptrsReleased.indexOf(inststr) == -1) {
+                            var ref_cnt = inst.contents.lpVtbl.contents.Release(inst);
+                            console.log(str + '->Release:', ref_cnt);
+                        } else {
+                            console.log('already released', str, 'so will not release it again, inststr:', inststr);
+                        }
                     }
                 }
 
@@ -261,7 +268,8 @@ function connectInputToOutput() {
                     IID_ICreateDevEnum: [0x29840822, 0x5b84, 0x11d0, [0xbd, 0x3b, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]],
                     CLSID_AudioInputDeviceCategory: [0x33d9a762, 0x90c8, 0x11d0, [0xbd, 0x43, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]],
                     CLSID_AudioRendererCategory: [0xe0f158e1, 0xcb04, 0x11d0, [0xbd, 0x4e, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]],
-                    IID_IPropertyBag: '55272A00-42CB-11CE-8135-00AA004BB851'
+                    IID_IPropertyBag: '55272A00-42CB-11CE-8135-00AA004BB851',
+                    IID_IBaseFilter: [0x56a86895, 0x0ad4, 0x11ce, [0xb0, 0x3a, 0x00, 0x20, 0xaf, 0x0b, 0xa7, 0x70]]
                 };
                 var IID_IMediaControl = ostypes.HELPER.CLSIDFromArr([0x56a868b1, 0x0ad4, 0x11ce, [0xb0, 0x3a, 0x00, 0x20, 0xaf, 0x0b, 0xa7, 0x70]]);
                 const BREAK = {};
@@ -338,7 +346,7 @@ function connectInputToOutput() {
             							}
 
                                         Object.assign(device_info, { devMonik, devMonikPtr, put });
-                                        // releaseInst(devMonikPtr, 'devMonik'); // dont release yet, this will be done after user has picked link33
+                                        releaseInst(devMonikPtr, 'devMonik'); // dont release yet, this will be done after user has picked link33
 
                                         devices.push(device_info);
             						}
@@ -350,7 +358,7 @@ function connectInputToOutput() {
                             releaseInst(deviceEnumPtr, 'deviceEnum');
 
                             // used in both the prompt sections
-                            var IID_IBaseFilter = GUID_fromDesc(clsid_desc.IID_IBaseFilter);
+                            var IID_IBaseFilter = GUID_fromDesc(guid_desc.IID_IBaseFilter);
 
                             // prompt user to pick input device or quit
                             var items = devices.filter(function(device) { return device.put == 'INPUT' });
@@ -491,6 +499,7 @@ function connectInputToOutput() {
                         releaseInst(graphPtr, 'graph');
                         try { releaseInst(deviceEnumPtr, 'deviceEnum'); } catch(ignore) { console.warn('error releasing deviceEnumPtr:', ignore); }
                         try { releaseInst(filePtr, 'file'); } catch(ignore) { console.warn('error releasing filePtr:', ignore); }
+                        try { releaseInst(catEnumPtr, 'catEnum'); } catch(ignore) { console.warn('error releasing catEnumPtr:', ignore); }
 
                         // not sure when to release these, it seems this guy never did:
                         try { releaseInst(inputPinsPtr, 'inputPins'); } catch(ignore) { console.warn('error releasing inputPinsPtr:', ignore); }
