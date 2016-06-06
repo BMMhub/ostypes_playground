@@ -212,7 +212,7 @@ function listAudio_InputAndRenderers() {
 	}
 }
 
-function captureAudioToFile() {
+function connectInputToOutput() {
 	switch (core.os.mname) {
 		case 'winnt':
                 var VARIANT_BSTR = ctypes.StructType('tagVARIANT', [
@@ -233,7 +233,7 @@ function captureAudioToFile() {
                 	var iid = GUID_fromDesc(iid_desc);
 
                 	var hr_create = ostypes.API('CoCreateInstance')(clsid.address(), null, ostypes.CONST.CLSCTX_INPROC_SERVER, iid.address(), inst.address());
-                	if (ostypes.checkHR(hr_create, 'creation - ' + type)) {
+                	if (ostypes.HELPER.checkHR(hr_create, 'creation - ' + type)) {
                 		iface = inst.contents.lpVtbl.contents;
                 		return { inst, iface };
                 	} else {
@@ -260,27 +260,28 @@ function captureAudioToFile() {
                     CLSID_SystemDeviceEnum: [0x62BE5D10, 0x60EB, 0x11d0, [0xBD, 0x3B, 0x00, 0xA0, 0xC9, 0x11, 0xCE, 0x86]],
                     IID_ICreateDevEnum: [0x29840822, 0x5b84, 0x11d0, [0xbd, 0x3b, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]],
                     CLSID_AudioInputDeviceCategory: [0x33d9a762, 0x90c8, 0x11d0, [0xbd, 0x43, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]],
-                    CLSID_AudioRendererCategory: [0xe0f158e1, 0xcb04, 0x11d0, [0xbd, 0x4e, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]]
+                    CLSID_AudioRendererCategory: [0xe0f158e1, 0xcb04, 0x11d0, [0xbd, 0x4e, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]],
+                    IID_IPropertyBag: '55272A00-42CB-11CE-8135-00AA004BB851'
                 };
                 var IID_IMediaControl = ostypes.HELPER.CLSIDFromArr([0x56a868b1, 0x0ad4, 0x11ce, [0xb0, 0x3a, 0x00, 0x20, 0xaf, 0x0b, 0xa7, 0x70]]);
                 const BREAK = {};
 
                 try {
                     var {iface:graph, inst:graphPtr} = createInst('IGraphBuilder', guid_desc.CLSID_FilterGraph, guid_desc.IID_IGraphBuilder);
-                    var {iface:deviceEnum, inst:devicEnumPtr} = createInst('ICreateDevEnum', guid_desc.CLSID_SystemDeviceEnum, guid_desc.IID_ICreateDevEnum);
+                    var {iface:deviceEnum, inst:deviceEnumPtr} = createInst('ICreateDevEnum', guid_desc.CLSID_SystemDeviceEnum, guid_desc.IID_ICreateDevEnum);
 
                     if (graph && deviceEnum) { // no need for !.isNull() test as if hr was FAILED then createInst would set these to undefined
                         var controlPtr = ostypes.TYPE.IMediaControl.ptr();
-                        var hr_qi = graph.QueryInterface(IID_IMediaControl.address(), controlPtr.address());
-                        if (ostypes.checkHR(hr_qi, 'hr_qi') === 1) { // no need -  && !controlPtr.isNull() as hr was SUCCEEDED
+                        var hr_qi = graph.QueryInterface(graphPtr, IID_IMediaControl.address(), controlPtr.address());
+                        if (ostypes.HELPER.checkHR(hr_qi, 'hr_qi') === 1) { // no need -  && !controlPtr.isNull() as hr was SUCCEEDED
                             var control = controlPtr.contents.lpVtbl.contents;
 
                             // get list input/output devices
                             var devices = []; // entries are objects {FriendlyName:string, CLSID:string, put:string, devMonk:cdata, devMonikPtr:cdata} // put is INPUT or OUTPUT
 
-                            var categories = [GUID_fromDesc(CLSID_AudioInputDeviceCategory), GUID_fromDesc(CLSID_AudioRendererCategory)];
+                            var categories = [GUID_fromDesc(guid_desc.CLSID_AudioInputDeviceCategory), GUID_fromDesc(guid_desc.CLSID_AudioRendererCategory)];
                             var varName;
-
+                            var IID_IPropertyBag = GUID_fromDesc(guid_desc.IID_IPropertyBag);
                             for (var i=0; i<categories.length; i++) {
                                 var category = categories[i];
                                 var put = i === 0 ? 'INPUT' : 'OUTPUT';
@@ -342,11 +343,11 @@ function captureAudioToFile() {
                                         devices.push(device_info);
             						}
 
-            						realseInst(catEnumPtr, 'catEnum');
+            						releaseInst(catEnumPtr, 'catEnum');
             					}
                             }
 
-                            realseInst(deviceEnumPtr, 'deviceEnum');
+                            releaseInst(deviceEnumPtr, 'deviceEnum');
 
                             // used in both the prompt sections
                             var IID_IBaseFilter = GUID_fromDesc(clsid_desc.IID_IBaseFilter);
@@ -470,11 +471,13 @@ function captureAudioToFile() {
                         }
                         // if connected should we disconnect?
                         if (ostypes.HELPER.checkHR(hr_run) === 1) {
-                            // its connected, should i disconnect?
-                            var hr_disconnect = pIn.Disconnect(pInPtr, pOut, null);
-                            if (ostypes.HELPER.checkHR(hr_disconnect, 'hr_disconnect') !== 1) {
-                                throw BREAK;
-                            }
+                            // TODO: its connected, should i disconnect? for now i do disconnect them
+                            // TODO: figure out how to use graph.Disconnect
+                            // msdn docs say dont do it this way --> // var hr_disconnect = pIn.Disconnect(pInPtr, pOut, null); // The Filter Graph Manager calls this method when it disconnects two filters. Applications and filters should not call this method. Instead, call the IFilterGraph::Disconnect method on the Filter Graph Manager.
+                            var hr_disconnect = graph.Disconnect(graphPtr, inPinPtr);
+                            ostypes.HELPER.checkHR(hr_disconnect, 'hr_disconnect input');
+                            var hr_disconnect = graph.Disconnect(graphPtr, outPinPtr);
+                            ostypes.HELPER.checkHR(hr_disconnect, 'hr_disconnect output');
                         }
                         if (devices) {
                             for (var i=0; i<devices.length; i++) {
@@ -486,14 +489,14 @@ function captureAudioToFile() {
                         releaseInst(outputDevPtr, 'outputDev');
                         releaseInst(controlPtr, 'control');
                         releaseInst(graphPtr, 'graph');
-                        realseInst(deviceEnumPtr, 'deviceEnum');
-                        releaseInst(filePtr, 'file');
+                        try { releaseInst(deviceEnumPtr, 'deviceEnum'); } catch(ignore) { console.warn('error releasing deviceEnumPtr:', ignore); }
+                        try { releaseInst(filePtr, 'file'); } catch(ignore) { console.warn('error releasing filePtr:', ignore); }
 
                         // not sure when to release these, it seems this guy never did:
-                        relaseInst(inputPinsPtr, 'inputPins');
-                        relaseInst(inPinPtr, 'inPin');
-                        relaseInst(outputPinsPtr, 'outputPins');
-                        relaseInst(outPinPtr, 'outPin');
+                        try { releaseInst(inputPinsPtr, 'inputPins'); } catch(ignore) { console.warn('error releasing inputPinsPtr:', ignore); }
+                        try { releaseInst(inPinPtr, 'inPin'); } catch(ignore) { console.warn('error releasing inPinPtr:', ignore); }
+                        try { releaseInst(outputPinsPtr, 'outputPins'); } catch(ignore) { console.warn('error releasing outputPinsPtr:', ignore); }
+                        try { releaseInst(outPinPtr, 'outPin'); } catch(ignore) { console.warn('error releasing outPinPtr:', ignore); }
                     });
                 }
             break;
@@ -504,7 +507,7 @@ function captureAudioToFile() {
 }
 
 function main() {
-    listAudio_InputAndRenderers();
+    connectInputToOutput();
 }
 
 function unmain() {
