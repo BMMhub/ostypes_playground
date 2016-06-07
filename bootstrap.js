@@ -50,166 +50,130 @@ function initOstypes() {
 
 var OSStuff = {};
 
-function waveIn() {
+function loopbackCapture() {
+    switch (core.os.mname) {
+        case 'winnt':
 
-	switch (core.os.mname) {
-			case 'winnt':
+                // constants
+                var BREAK = {};
 
-					const MMSYSERR_NOERROR = 0;
+                try {
 
-					var nDevices = ostypes.API('waveInGetNumDevs')();
-					console.log('nDevices:', nDevices, nDevices.toString(), uneval(nDevices));
+                    // get default device
+                    var CLSID_MMDeviceEnumerator = ostypes.HELPER.CLSIDFromArr([0xBCDE0395, 0xE52F, 0x467C, [0x8E, 0x3D, 0xC4, 0x57, 0x92, 0x91, 0x69, 0x2E]]);
+                    var IID_IMMDeviceEnumerator = ostypes.HELPER.CLSIDFromArr([0xA95664D2, 0x9614, 0x4F35, [0xA7, 0x46, 0xDE, 0x8D, 0xB6, 0x36, 0x17, 0xE6]]);
+                    var {iface:devEnum, inst:devEnumPtr} = createInst('IMMDeviceEnumerator', CLSID_MMDeviceEnumerator, IID_IMMDeviceEnumerator);
+                    if (!devEnum) {
+                        throw BREAK;
+                    }
 
-					var formats = [];
-					var stWIC = ostypes.TYPE.WAVEINCAPS();
-					console.log('ostypes.TYPE.WAVEINCAPS.size:', ostypes.TYPE.WAVEINCAPS.size);
-					for(var i=0; i<nDevices; i++) {
-						var mRes = ostypes.API('waveInGetDevCaps')(i, stWIC.address(), ostypes.TYPE.WAVEINCAPS.size);
-						console.log('mRes:', mRes, mRes.toString(), uneval(mRes));
-						if (!cutils.jscEqual(mRes, MMSYSERR_NOERROR)) {
-							console.error('failed to get waveInGetDevCaps, mRes:', mRes, mRes.toString());
-							throw new Error('failed to get waveInGetDevCaps');
-						}
-						console.log('stWIC:', stWIC, stWIC.toString(), uneval(stWIC));
-						formats.push(stWIC.szPname.readString());
-					}
-					console.log('formats:', formats);
+                    var mmDevPtr = ostypes.TYPE.IMMDevice.ptr();
+                    var hr_getEndpt = devEnum.GetDefaultAudioEndpoint(devEnumPtr, ostypes.CONST.eRender, ostypes.CONST.eConsole, mmDevPtr.address());
+                    if (ostypes.HELPER.checkHR(hr_getEndpt, 'hr_getEndpt') !== 1) {
+                        throw BREAK;
+                    }
+                    var mmDev = mmDevPtr.contents.lpVtbl.contents;
 
-					try {
+                    ostypes.HELPER.SafeRelease(devEnumPtr, 'devEnum');
 
-					} catch(ex) {
-						console.error('error occoured:', ex);
-					} finally {
+                    // activate an (the default, for us, since we want loopback) IAudioClient
+                    var IID_IAudioClient = ostypes.HELPER.CLSIDFromArr([0x1CB9AD4C, 0xDBFA, 0x4c32, [0xB1, 0x78, 0xC2, 0xF5, 0x68, 0xA7, 0x03, 0xB2]]);
+                    // var IID_IAudioRenderClient = ostypes.HELPER.CLSIDFromArr([0xF294ACFC, 0x3146, 0x4483, [0xA7, 0xBF, 0xAD, 0xDC, 0xA7, 0xC2, 0x60, 0xE2]]);
+                    var audClientPtr = ostypes.TYPE.IAudioClient.ptr();
+                    var hr_activate = mmDev.Activate(mmDevPtr, IID_IAudioClient.address(), ostypes.CONST.CLSCTX_INPROC_SERVER, null, audClientPtr.address());
+                    if (ostypes.HELPER.checkHR(hr_activate, 'hr_activate') !== 1) {
+                        throw BREAK();
+                    }
+                    var audClient = audClientPtr.contents.lpVtbl.contents;
 
-					}
+                    // get the default device periodicity, why? I don't know...
+                    var hnsDefaultDevicePeriod = ostypes.TYPE.REFERENCE_TIME();
+                    var hr_getPeriod = audClient.GetDevicePeriod(audClientPtr, hnsDefaultDevicePeriod.address(), null);
+                    if (ostypes.HELPER.checkHR(hr_getPeriod, 'hr_getPeriod') !== 1) {
+                        throw BREAK();
+                    }
 
-				break;
-			default:
-				console.error('Your os is not yet supported, your OS is: ' + core.os.mname);
-				throw new Error('Your os is not yet supported, your OS is: ' + core.os.mname);
-	}
+                    // get the default device format (incoming...)
+                    var pwfx = ostypes.TYPE.WAVEFORMATEX.ptr();
+                    var hr_getFormat = audClient.GetMixFormat(audClientPtr, pwfx.address());
+                    if (ostypes.HELPER.checkHR(hr_getFormat, 'hr_getFormat') !== 1) {
+                        // he does CoTaskMemFree on pwfx here as well which is weird i would think
+                        throw BREAK;
+                    }
+
+                    // coerce int-XX wave format (like int-16 or int-32)
+                    // can do this in-place since we're not changing the size of the format
+                    // also, the engine will auto-convert from float to int for us
+                    switch (pwfx - > wFormatTag) {
+                    	case WAVE_FORMAT_IEEE_FLOAT:
+                    		assert(false); // we never get here...I never have anyway...my guess is windows vista+ by default just uses WAVE_FORMAT_EXTENSIBLE
+                    		pwfx - > wFormatTag = WAVE_FORMAT_PCM;
+                    		pwfx - > wBitsPerSample = 16;
+                    		pwfx - > nBlockAlign = pwfx - > nChannels * pwfx - > wBitsPerSample / 8;
+                    		pwfx - > nAvgBytesPerSec = pwfx - > nBlockAlign * pwfx - > nSamplesPerSec;
+                    		break;
+
+                    	case WAVE_FORMAT_EXTENSIBLE: // 65534
+                    		{
+                    			// naked scope for case-local variable
+                    			PWAVEFORMATEXTENSIBLE pEx = reinterpret_cast < PWAVEFORMATEXTENSIBLE > (pwfx);
+                    			if (IsEqualGUID(KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, pEx - > SubFormat)) {
+                    				// WE GET HERE!
+                    				pEx - > SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
+                    				// convert it to PCM, but let it keep as many bits of precision as it has initially...though it always seems to be 32
+                    				// comment this out and set wBitsPerSample to  pwfex->wBitsPerSample = getBitsPerSample(); to get an arguably "better" quality 32 bit pcm
+                    				// unfortunately flash media live encoder basically rejects 32 bit pcm, and it's not a huge gain sound quality-wise, so disabled for now.
+                    				pwfx - > wBitsPerSample = 16;
+                    				pEx - > Samples.wValidBitsPerSample = pwfx - > wBitsPerSample;
+                    				pwfx - > nBlockAlign = pwfx - > nChannels * pwfx - > wBitsPerSample / 8;
+                    				pwfx - > nAvgBytesPerSec = pwfx - > nBlockAlign * pwfx - > nSamplesPerSec;
+                    				// see also setupPwfex method
+                    			} else {
+                    				ShowOutput("Don't know how to coerce mix format to int-16\n");
+                    				CoTaskMemFree(pwfx);
+                    				pAudioClient - > Release();
+                    				return E_UNEXPECTED;
+                    			}
+                    		}
+                    		break;
+
+                    	default:
+                    		console.error("Don't know how to coerce WAVEFORMATEX with wFormatTag:", pwfx.wFormatTag);
+                    		throw BREAK;
+                    }
+
+                } catch (ex if ex != BREAK) {
+                    console.error('ERROR :: ', ex);
+                } finally {
+                    try { if (pwfx && !pwfx.isNull()) { ostypes.API('CoTaskMemFree')(pwfx); } } catch(ignore) { console.warn('error releasing pwfx', ignore); }
+                    try { ostypes.HELPER.SafeRelease(devEnumPtr, 'devEnum'); } catch(ignore) { console.warn('error releasing devEnumPtr', ignore); }
+                    try { ostypes.HELPER.SafeRelease(mmDevPtr, 'mmDev'); } catch(ignore) { console.warn('error releasing mmDevPtr', ignore); }
+                    try { ostypes.HELPER.SafeRelease(audClientPtr, 'audClient'); } catch(ignore) { console.warn('error releasing audClientPtr', ignore); }
+                }
+
+            break;
+        default:
+            console.error('Your os is not yet supported, your OS is: ' + core.os.mname);
+            throw new Error('Your os is not yet supported, your OS is: ' + core.os.mname);
+    }
 }
 
-function listAudio_InputAndRenderers() {
-  switch (core.os.mname) {
-			case 'winnt':
+function createInst(type, clsid_desc, iid_desc) {
+    // _desc is either string or arr
+    // context is always CLSCTX_INPROC_SERVER
+    var inst = ostypes.TYPE[type].ptr();
+    var iface;
 
-					var VARIANT_BSTR = ctypes.StructType('tagVARIANT', [
-						{ vt: ostypes.TYPE.VARTYPE },
-                        { wReserved1: ostypes.TYPE.WORD },
-                        { wReserved2: ostypes.TYPE.WORD },
-                        { wReserved3: ostypes.TYPE.WORD },
-                        { bstrVal: ostypes.TYPE.BSTR }
-					]);
+    var clsid = GUID_fromDesc(clsid_desc);
+    var iid = GUID_fromDesc(iid_desc);
 
-					var deviceEnumPtr;
-					var deviceEnum;
-
-					var CLSID_SystemDeviceEnum = ostypes.HELPER.CLSIDFromArr([0x62be5d10, 0x60eb, 0x11d0,[0xbd, 0x3b, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]]);
-					var IID_ICreateDevEnum = ostypes.HELPER.CLSIDFromString('29840822-5B84-11D0-BD3B-00A0C911CE86');
-
-					deviceEnumPtr = ostypes.TYPE.ICreateDevEnum.ptr();
-					var hr_instDeviceNum = ostypes.API('CoCreateInstance')(CLSID_SystemDeviceEnum.address(), null, ostypes.CONST.CLSCTX_INPROC_SERVER, IID_ICreateDevEnum.address(), deviceEnumPtr.address());//Initialise Device enumerator
-					ostypes.HELPER.checkHRESULT(hr_instDeviceNum, 'instantiate deviceEnum');
-					deviceEnum = deviceEnumPtr.contents.lpVtbl.contents;
-
-					// Enumerate the specified device, distinguished by DEVICE_CLSID such as CLSID_AudioInputDeviceCategory
-					var CLSID_AudioInputDeviceCategory = ostypes.HELPER.CLSIDFromArr([0x33d9a762, 0x90c8, 0x11d0, [0xbd, 0x43, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]])
-                    var CLSID_AudioRendererCategory = ostypes.HELPER.CLSIDFromArr([0xe0f158e1, 0xcb04, 0x11d0, [0xbd, 0x4e, 0x00, 0xa0, 0xc9, 0x11, 0xce, 0x86]]);
-
-
-                    var IID_IPropertyBag = ostypes.HELPER.CLSIDFromString('55272A00-42CB-11CE-8135-00AA004BB851');
-                    var fetched = ostypes.TYPE.ULONG();
-                    var varName;
-                    var devices = [];
-                    var categories = [CLSID_AudioInputDeviceCategory, CLSID_AudioRendererCategory];
-                    for (var i=0; i<categories.length; i++) {
-                        var category = categories[i];
-                        var enumCatPtr = ostypes.TYPE.IEnumMoniker.ptr();
-        				var hr_enum = deviceEnum.CreateClassEnumerator(deviceEnumPtr, category.address(), enumCatPtr.address(), 0);
-    					if (ostypes.HELPER.checkHR(hr_enum, 'hr_enum') === 1) {
-    						var enumCat = enumCatPtr.contents.lpVtbl.contents;
-
-                            while (true) {
-                                var device_info = {};
-
-    							// pickup as moniker
-    							var devMonikPtr = ostypes.TYPE.IMoniker.ptr();
-    							var devMonik = null;
-    							var hr_next =  enumCat.Next(enumCatPtr, 1, devMonikPtr.address(), fetched.address());
-    							console.log('hr_next:', hr_next.toString(), 'fetched:', cutils.jscGetDeepest(fetched));
-    							if (ostypes.HELPER.checkHR(hr_next, 'hr_next') !== 1) {
-    								// when fetched is 0, we get hr_next of `1` which is "did not succeed but did not fail", so checkHR returns -1
-    								break;
-    							}
-    							devMonik = devMonikPtr.contents.lpVtbl.contents;
-
-    							// bind the properties of the moniker
-                                var propBagPtr = ostypes.TYPE.IPropertyBag.ptr();
-    							var hr_bind = devMonik.BindToStorage(devMonikPtr, null, null, IID_IPropertyBag.address(), propBagPtr.address());
-    							if (ostypes.HELPER.checkHR(hr_bind, 'hr_bind')) {
-    								var propBag = propBagPtr.contents.lpVtbl.contents;
-
-                                    // NEXT PROP
-                                    if (!varName) {
-                                        // Initialise the variant data type
-                                        varName = ostypes.TYPE.VARIANT();
-                                        ostypes.API('VariantInit')(varName.address());
-                                    }
-
-    								var hr_read = propBag.Read(propBagPtr, 'FriendlyName', varName.address(), null);
-    								// console.log('varName:', varName, varName.toString(), uneval(varName));
-    								varNameCast = ctypes.cast(varName.address(), VARIANT_BSTR.ptr).contents;
-    								// console.log('varNameCast:', varNameCast, varNameCast.toString(), uneval(varNameCast));
-    								if (ostypes.HELPER.checkHR(hr_read, 'hr_read')) {
-    									// console.log('FriendlyName:', 'varNameCast.bstrVal:', varNameCast.bstrVal.readString());
-
-                                        device_info.FriendlyName = varNameCast.bstrVal.readString();
-
-                                        //clear the variant data type
-    									ostypes.API('VariantClear')(varName.address());
-    								}
-
-                                    // NEXT PROP
-    								var hr_read = propBag.Read(propBagPtr, 'CLSID', varName.address(), null);
-    								varNameCast = ctypes.cast(varName.address(), VARIANT_BSTR.ptr).contents;
-    								if (ostypes.HELPER.checkHR(hr_read, 'hr_read')) {
-    									// console.log('CLSID:', 'varNameCast.bstrVal:', varNameCast.bstrVal.readString());
-
-                                        device_info.CLSID = varNameCast.bstrVal.readString(); // is "{E30629D2-27E5-11CE-875D-00608CB78066}" without the quotes
-
-    									//clear the variant data type
-    									ostypes.API('VariantClear')(varName.address());
-    								}
-
-    								var releasePropBag = propBag.Release(propBagPtr); // release the properties
-    								console.log('releasePropBag:', releasePropBag, releasePropBag.toString());
-    							}
-
-    							var releaseDevMonik = devMonik.Release(devMonikPtr); // release Device moniker
-    							console.log('releaseDevMonik:', releaseDevMonik, releaseDevMonik.toString());
-
-                                devices.push(device_info);
-    						}
-
-    						var releaseEnumCat = enumCat.Release(enumCatPtr); // release category enumerator
-    						console.log('releaseEnumCat:', releaseEnumCat, releaseEnumCat.toString());
-    					}
-                    }
-                    console.log('devices:', devices);
-
-					if (!deviceEnumPtr.isNull()) {
-						var releaseDeviceEnum = deviceEnum.Release(deviceEnumPtr);
-						console.log('releaseDeviceEnum:', releaseDeviceEnum, releaseDeviceEnum.toString());
-					} else {
-						console.log('deviceEnumPtr is null', deviceEnumPtr, deviceEnumPtr.toString());
-					}
-
-				break;
-			default:
-				console.error('Your os is not yet supported, your OS is: ' + core.os.mname);
-				throw new Error('Your os is not yet supported, your OS is: ' + core.os.mname);
-	}
+    var hr_create = ostypes.API('CoCreateInstance')(clsid.address(), null, ostypes.CONST.CLSCTX_INPROC_SERVER, iid.address(), inst.address());
+    if (ostypes.HELPER.checkHR(hr_create, 'creation - ' + type)) {
+        iface = inst.contents.lpVtbl.contents;
+        return { inst, iface };
+    } else {
+        return {};
+    }
 }
 
 function connectInputToOutput() {
@@ -222,24 +186,6 @@ function connectInputToOutput() {
                     { wReserved3: ostypes.TYPE.WORD },
                     { bstrVal: ostypes.TYPE.BSTR }
                 ]);
-
-                function createInst(type, clsid_desc, iid_desc) {
-                	// _desc is either string or arr
-                	// context is always CLSCTX_INPROC_SERVER
-                	var inst = ostypes.TYPE[type].ptr();
-                	var iface;
-
-                	var clsid = GUID_fromDesc(clsid_desc);
-                	var iid = GUID_fromDesc(iid_desc);
-
-                	var hr_create = ostypes.API('CoCreateInstance')(clsid.address(), null, ostypes.CONST.CLSCTX_INPROC_SERVER, iid.address(), inst.address());
-                	if (ostypes.HELPER.checkHR(hr_create, 'creation - ' + type)) {
-                		iface = inst.contents.lpVtbl.contents;
-                		return { inst, iface };
-                	} else {
-                		return {};
-                	}
-                }
 
                 function GUID_fromDesc(aGuidDesc) {
                     return typeof(aGuidDesc) == 'string' ? ostypes.HELPER.CLSIDFromString(aGuidDesc) : ostypes.HELPER.CLSIDFromArr(aGuidDesc);
