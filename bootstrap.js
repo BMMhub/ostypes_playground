@@ -104,43 +104,47 @@ function loopbackCapture() {
                     // coerce int-XX wave format (like int-16 or int-32)
                     // can do this in-place since we're not changing the size of the format
                     // also, the engine will auto-convert from float to int for us
-                    switch (pwfx - > wFormatTag) {
+                    console.log('pwfx.wFormatTag:', pwfx.wFormatTag);
+                    switch (parseInt(cutils.jscGetDeepest(pwfx.wFormatTag))) {
                     	case WAVE_FORMAT_IEEE_FLOAT:
-                    		assert(false); // we never get here...I never have anyway...my guess is windows vista+ by default just uses WAVE_FORMAT_EXTENSIBLE
-                    		pwfx - > wFormatTag = WAVE_FORMAT_PCM;
-                    		pwfx - > wBitsPerSample = 16;
-                    		pwfx - > nBlockAlign = pwfx - > nChannels * pwfx - > wBitsPerSample / 8;
-                    		pwfx - > nAvgBytesPerSec = pwfx - > nBlockAlign * pwfx - > nSamplesPerSec;
+                        		// we never get here...I never have anyway...my guess is windows vista+ by default just uses WAVE_FORMAT_EXTENSIBLE
+                        		pwfx.wFormatTag = ostypes.CONST.WAVE_FORMAT_PCM;
+                        		pwfx.wBitsPerSample = 16;
+                        		pwfx.nBlockAlign = parseInt(cutils.jscGetDeepest(pwfx.nChannels)) * pwfx.wBitsPerSample / 8;
+                        		pwfx.nAvgBytesPerSec = parseInt(cutils.jscGetDeepest(pwfx.nBlockAlign)) * parseInt(cutils.jscGetDeepest(pwfx.nSamplesPerSec));
                     		break;
-
                     	case WAVE_FORMAT_EXTENSIBLE: // 65534
-                    		{
                     			// naked scope for case-local variable
-                    			PWAVEFORMATEXTENSIBLE pEx = reinterpret_cast < PWAVEFORMATEXTENSIBLE > (pwfx);
-                    			if (IsEqualGUID(KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, pEx - > SubFormat)) {
+                    			var pEx = ctypes.cast(pwfx, ostypes.TYPE.PWAVEFORMATEXTENSIBLE);
+                                console.log('pEx.SubFormat:', pEx.SubFormat);
+                    			if (IsEqualGUID(KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, pEx.SubFormat)) {
                     				// WE GET HERE!
-                    				pEx - > SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
+                    				pEx.SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
                     				// convert it to PCM, but let it keep as many bits of precision as it has initially...though it always seems to be 32
                     				// comment this out and set wBitsPerSample to  pwfex->wBitsPerSample = getBitsPerSample(); to get an arguably "better" quality 32 bit pcm
                     				// unfortunately flash media live encoder basically rejects 32 bit pcm, and it's not a huge gain sound quality-wise, so disabled for now.
-                    				pwfx - > wBitsPerSample = 16;
-                    				pEx - > Samples.wValidBitsPerSample = pwfx - > wBitsPerSample;
-                    				pwfx - > nBlockAlign = pwfx - > nChannels * pwfx - > wBitsPerSample / 8;
-                    				pwfx - > nAvgBytesPerSec = pwfx - > nBlockAlign * pwfx - > nSamplesPerSec;
+                    				pwfx.wBitsPerSample = 16;
+                    				pEx.Samples.wValidBitsPerSample = parseInt(cutils.jscGetDeepest(pwfx.wBitsPerSample));
+                    				pwfx.nBlockAlign = parseInt(cutils.jscGetDeepest(pwfx.nChannels)) * parseInt(cutils.jscGetDeepest(pwfx.wBitsPerSample)) / 8;
+                    				pwfx.nAvgBytesPerSec = parseInt(cutils.jscGetDeepest(pwfx.nBlockAlign)) * parseInt(cutils.jscGetDeepest(pwfx.nSamplesPerSec));
                     				// see also setupPwfex method
                     			} else {
-                    				ShowOutput("Don't know how to coerce mix format to int-16\n");
-                    				CoTaskMemFree(pwfx);
-                    				pAudioClient - > Release();
-                    				return E_UNEXPECTED;
+                    				console.error("Don't know how to coerce mix format to int-16\n");
+                    				throw BREAK;
                     			}
-                    		}
                     		break;
-
                     	default:
                     		console.error("Don't know how to coerce WAVEFORMATEX with wFormatTag:", pwfx.wFormatTag);
                     		throw BREAK;
                     }
+
+                    var nBlockAlign = pwfx.nBlockAlign;
+
+                    // avoid stuttering on close when using loopback
+                    // http://social.msdn.microsoft.com/forums/en-US/windowspro-audiodevelopment/thread/c7ba0a04-46ce-43ff-ad15-ce8932c00171/
+
+                    var REFTIMES_PER_SEC = 10000000;
+                    var hnsRequestedDuration = REFTIMES_PER_SEC;
 
                 } catch (ex if ex != BREAK) {
                     console.error('ERROR :: ', ex);
@@ -150,6 +154,8 @@ function loopbackCapture() {
                     try { ostypes.HELPER.SafeRelease(mmDevPtr, 'mmDev'); } catch(ignore) { console.warn('error releasing mmDevPtr', ignore); }
                     try { ostypes.HELPER.SafeRelease(audClientPtr, 'audClient'); } catch(ignore) { console.warn('error releasing audClientPtr', ignore); }
                 }
+
+
 
             break;
         default:
