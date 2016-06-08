@@ -50,25 +50,6 @@ function initOstypes() {
 
 var OSStuff = {};
 
-
-function createInst(type, clsid_desc, iid_desc) {
-    // _desc is either string or arr
-    // context is always CLSCTX_INPROC_SERVER
-    var inst = ostypes.TYPE[type].ptr();
-    var iface;
-
-    var clsid = GUID_fromDesc(clsid_desc);
-    var iid = GUID_fromDesc(iid_desc);
-
-    var hr_create = ostypes.API('CoCreateInstance')(clsid.address(), null, ostypes.CONST.CLSCTX_INPROC_SERVER, iid.address(), inst.address());
-    if (ostypes.HELPER.checkHR(hr_create, 'creation - ' + type)) {
-        iface = inst.contents.lpVtbl.contents;
-        return { inst, iface };
-    } else {
-        return {};
-    }
-}
-
 function connectInputToOutput() {
 	switch (core.os.mname) {
 		case 'winnt':
@@ -79,6 +60,24 @@ function connectInputToOutput() {
                     { wReserved3: ostypes.TYPE.WORD },
                     { bstrVal: ostypes.TYPE.BSTR }
                 ]);
+
+                function createInst(type, clsid_desc, iid_desc) {
+                    // _desc is either string or arr
+                    // context is always CLSCTX_INPROC_SERVER
+                    var inst = ostypes.TYPE[type].ptr();
+                    var iface;
+
+                    var clsid = GUID_fromDesc(clsid_desc);
+                    var iid = GUID_fromDesc(iid_desc);
+
+                    var hr_create = ostypes.API('CoCreateInstance')(clsid.address(), null, ostypes.CONST.CLSCTX_INPROC_SERVER, iid.address(), inst.address());
+                    if (ostypes.HELPER.checkHR(hr_create, 'creation - ' + type)) {
+                        iface = inst.contents.lpVtbl.contents;
+                        return { inst, iface };
+                    } else {
+                        return {};
+                    }
+                }
 
                 function GUID_fromDesc(aGuidDesc) {
                     return typeof(aGuidDesc) == 'string' ? ostypes.HELPER.CLSIDFromString(aGuidDesc) : ostypes.HELPER.CLSIDFromArr(aGuidDesc);
