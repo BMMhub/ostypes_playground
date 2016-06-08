@@ -50,6 +50,134 @@ function initOstypes() {
 
 var OSStuff = {};
 
+const BREAK = {};
+function RecordAudioStream(mySinkPtr) {
+
+    function createInst(type, clsid, iid, clsctx=ostypes.CONST.CLSCTX_INPROC_SERVER) {
+        // clsid and iid are cdata
+        // context is always CLSCTX_INPROC_SERVER
+        var inst = ostypes.TYPE[type].ptr();
+        var iface;
+
+        var hr_create = ostypes.API('CoCreateInstance')(clsid.address(), null, clsctx, iid.address(), inst.address());
+        if (ostypes.HELPER.checkHR(hr_create, 'creation - ' + type)) {
+            iface = inst.contents.lpVtbl.contents;
+            return { inst, iface };
+        } else {
+            return {};
+        }
+    }
+
+	var REFTIMES_PER_SEC = 10000000;
+    var REFTIMES_PER_MILLISEC = 10000;
+	var bDone = false;
+
+    const CLSCTX_ALL = ostypes.CONST.CLSCTX_INPROC_SERVER | ostypes.CONST.CLSCTX_INPROC_HANDLER | ostypes.CONST.CLSCTX_LOCAL_SERVER | ostypes.CONST.CLSCTX_REMOTE_SERVER;
+
+	var CLSID_MMDeviceEnumerator = ostypes.HELPER.CLSIDFromArr([0xBCDE0395, 0xE52F, 0x467C, [0x8E, 0x3D, 0xC4, 0x57, 0x92, 0x91, 0x69, 0x2E]]);
+	var IID_IMMDeviceEnumerator = ostypes.HELPER.CLSIDFromArr([0xA95664D2, 0x9614, 0x4F35, [0xA7, 0x46, 0xDE, 0x8D, 0xB6, 0x36, 0x17, 0xE6]]);
+	var {iface:mmEnum, inst:mmEnumPtr} = createInst('IMMDeviceEnumerator', CLSID_MMDeviceEnumerator,  IID_IMMDeviceEnumerator, CLSCTX_ALL);
+
+	try {
+		var devPtr = ostypes.TYPE.IMMDevice.ptr();
+		var hr_dev = mmEnum.GetDefaultAudioEndpoint(mmEnumPtr, ostypes.CONST.eCapture, ostypes.CONST.eConsole, devPtr.address());
+		if (ostypes.HELPER.checkHR(hr_dev, 'hr_dev') !== 1) { throw BREAK }
+		var dev = devPtr.contents.lpVtbl.contents;
+
+		var audClientPtr = ostypes.TYPE.IAudioClient.ptr();
+		var IID_IAudioClient = ostypes.HELPER.CLSIDFromArr([0x1CB9AD4C, 0xDBFA, 0x4c32, [0xB1, 0x78, 0xC2, 0xF5, 0x68, 0xA7, 0x03, 0xB2]]);
+		var hr_act = dev.Activate(devPtr, IID_IAudioClient.address(), CLSCTX_ALL, null, audClientPtr.address());
+		if (ostypes.HELPER.checkHR(hr_act, 'hr_act') !== 1) { throw BREAK }
+		var audClient = audClientPtr.contents.lpVtbl.contents;
+
+        var pwfx = ostypes.TYPE.WAVEFORMATEX.ptr();
+		var hr_format = audClient.GetMixFormat(audClientPtr, pwfx.address());
+		if (ostypes.HELPER.checkHR(hr_format, 'hr_format') !== 1) { throw BREAK }
+
+		var hnsRequestedDuration = REFTIMES_PER_SEC;
+		var pwfx = ostypes.TYPE.WAVEFORMATEX.ptr();
+		var hr_init = audClient.Initialize(audClientPtr, ostypes.CONST.AUDCLNT_SHAREMODE_SHARED, 0, hnsRequestedDuration, 0, pwfx, null);
+		if (ostypes.HELPER.checkHR(hr_init, 'hr_init') !== 1) { throw BREAK }
+
+		// Get the size of the allocated buffer.
+		var bufferFrameCount = ostypes.TYPE.UINT32;
+		var hr_size = audClient.GetBufferSize(audClientPtr, bufferFrameCount.address());
+		if (ostypes.HELPER.checkHR(hr_size, 'hr_size') !== 1) { throw BREAK }
+
+		var capClientPtr = ostypes.TYPE.IAudioCaptureClient.ptr();
+		var IID_IAudioCaptureClient = ostypes.HELPER.CLSIDFromString('c8adbd64-e71e-48a0-a4de-185c395cd317');
+		var hr_service = audClient.GetService(audClientPtr, IID_IAudioCaptureClient.address(), capClientPtr.address());
+		if (ostypes.HELPER.checkHR(hr_service, 'hr_service') !== 1) { throw BREAK }
+		var capClient = capClientPtr.contents.lpVtbl.contents;
+
+		// // Notify the audio sink which format to use.
+		// var hr_setform = mySink.SetFormat(mySinkPtr, pwfx);
+		// if (ostypes.HELPER.checkHR(hr_setform, 'hr_setform') !== 1) { throw BREAK }
+
+		// Calculate the actual duration of the allocated buffer.
+		var hnsActualDuration = parseInt(cutils.jscGetDeepest(bufferFrameCount)) / parseInt(cutils.jscGetDeepest(pwfx.contents.nSamplesPerSec));
+
+        // Start recording.
+        var hr_start = audClient.Start(audClientPtr);
+        if (ostypes.HELPER.checkHR(hr_start, 'hr_start') !== 1) { throw BREAK }
+
+        // Each loop fills about half of the shared buffer.
+        var packetLength = ostypes.TYPE.UINT32();
+        var data = ostypes.TYPE.BYTE.ptr();
+        var flags = ostypes.TYPE.DWORD();
+        var numFramesAvailable = ostypes.TYPE.UINT32();
+        while (bDone == FALSE) {
+            // Sleep for half the buffer duration.
+            var rez_sleep = ostypes.API('SleepEx')(hnsActualDuration / REFTIMES_PER_MILLISEC / 2, false);
+            console.log('rez_sleep:', rez_sleep);
+
+            var hr_len = capClient.GetNextPacketSize(capClientPtr, packetLength.address());
+            if (ostypes.HELPER.checkHR(hr_len, 'hr_len') !== 1) { throw BREAK }
+
+            while (parseInt(cutils.jscGetDeepest(packetLength)) !== 0) {
+                // Get the available data in the shared buffer.
+                var hr_getbuf = capClient.GetBufferSize(capClientPtr, data.address(), numFramesAvailable.address(), flags.address(), null, null);
+                if (ostypes.HELPER.checkHR(hr_getbuf, 'hr_getbuf') !== 1) { throw BREAK }
+
+                if (parseInt(cutils.jscGetDeepest(packetLength)) & ostypes.CONST.AUDCLNT_BUFFERFLAGS_SILENT) {
+                    data.address().contents = data.constructor(0); // Tell CopyData to write silence.
+                }
+
+                // // Copy the available capture data to the audio sink.
+                // var hr_copy = mySink.CopyData(mySinkPtr, data, numFramesAvailable, bDone.address());
+                // if (ostypes.HELPER.checkHR(hr_copy, 'hr_copy') !== 1) { throw BREAK }
+
+                var hr_relbuf = capClient.ReleaseBuffer(capClientPtr, numFramesAvailable);
+                if (ostypes.HELPER.checkHR(hr_relbuf, 'hr_relbuf') !== 1) { throw BREAK }
+
+                var hr_len2 = capClient.GetNextPacketSize(capClientPtr, packetLength.address());
+                if (ostypes.HELPER.checkHR(hr_len2, 'hr_len2') !== 1) { throw BREAK }
+            }
+        }
+
+        // Stop recording.
+        var hr_stop = audClient.Stop(audClientPtr);
+        if (ostypes.HELPER.checkHR(hr_stop, 'hr_stop') !== 1) { throw BREAK }
+
+	} catch(ex if ex != BREAK) {
+		console.error('ERROR:', ex);
+	} finally {
+		trySafeRelease(mmEnumPtr, 'mmEnum');
+		trySafeRelease(devPtr, 'dev');
+		trySafeRelease(audClientPtr, 'audClient');
+		if (pwfx && !pwfx.isNull()) { ostypes.CoTaskMemFree(pwfx) }
+		trySafeRelease(capClientPtr, 'capClient');
+	}
+}
+
+function trySafeRelease(ppv, str) {
+	try {
+		ostypes.HELPER.SafeRelease(ppv, str)
+	} catch(ignore) {
+		console.warn('error releasing', str, ':', ignore);
+	}
+}
+
 function connectInputToOutput() {
 	switch (core.os.mname) {
 		case 'winnt':
@@ -156,7 +284,6 @@ function connectInputToOutput() {
                     IID_IBaseFilter: [0x56a86895, 0x0ad4, 0x11ce, [0xb0, 0x3a, 0x00, 0x20, 0xaf, 0x0b, 0xa7, 0x70]]
                 };
                 var IID_IMediaControl = ostypes.HELPER.CLSIDFromArr([0x56a868b1, 0x0ad4, 0x11ce, [0xb0, 0x3a, 0x00, 0x20, 0xaf, 0x0b, 0xa7, 0x70]]);
-                const BREAK = {};
 
                 try {
                     var {iface:graph, inst:graphPtr} = createInst('IGraphBuilder', guid_desc.CLSID_FilterGraph, guid_desc.IID_IGraphBuilder);
@@ -422,7 +549,7 @@ function connectInputToOutput() {
 }
 
 function main() {
-    connectInputToOutput();
+    RecordAudioStream();
 }
 
 function unmain() {
