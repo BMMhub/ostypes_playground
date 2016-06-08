@@ -91,8 +91,11 @@ function RecordAudioStream(mySinkPtr) {
 		var audClient = audClientPtr.contents.lpVtbl.contents;
 
         var pwfx = ostypes.TYPE.WAVEFORMATEX.ptr();
+        console.log('pwfx:', pwfx.toString());
 		var hr_format = audClient.GetMixFormat(audClientPtr, pwfx.address());
 		if (ostypes.HELPER.checkHR(hr_format, 'hr_format') !== 1) { throw BREAK }
+        console.log('pwfx:', pwfx.toString());
+        console.log('pwfx:', pwfx.contents.toString());
 
 		var hnsRequestedDuration = REFTIMES_PER_SEC;
 		var pwfx = ostypes.TYPE.WAVEFORMATEX.ptr();
