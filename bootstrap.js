@@ -80,7 +80,7 @@ function RecordAudioStream(mySinkPtr) {
 
 	try {
 		var devPtr = ostypes.TYPE.IMMDevice.ptr();
-		var hr_dev = mmEnum.GetDefaultAudioEndpoint(mmEnumPtr, ostypes.CONST.eCapture, ostypes.CONST.eConsole, devPtr.address());
+		var hr_dev = mmEnum.GetDefaultAudioEndpoint(mmEnumPtr, ostypes.CONST.eRender, ostypes.CONST.eConsole, devPtr.address());
 		if (ostypes.HELPER.checkHR(hr_dev, 'hr_dev') !== 1) { throw BREAK }
 		var dev = devPtr.contents.lpVtbl.contents;
 
@@ -99,7 +99,7 @@ function RecordAudioStream(mySinkPtr) {
         console.log('pwfx:', pwfx.contents);
 
 		var hnsRequestedDuration = REFTIMES_PER_SEC;
-		var hr_init = audClient.Initialize(audClientPtr, ostypes.CONST.AUDCLNT_SHAREMODE_SHARED, 0, hnsRequestedDuration, 0, pwfx, null);
+		var hr_init = audClient.Initialize(audClientPtr, ostypes.CONST.AUDCLNT_SHAREMODE_SHARED, ostypes.CONST.AUDCLNT_STREAMFLAGS_LOOPBACK, hnsRequestedDuration, 0, pwfx, null);
 		if (ostypes.HELPER.checkHR(hr_init, 'hr_init') !== 1) { throw BREAK }
 
 		// Get the size of the allocated buffer.
@@ -159,7 +159,10 @@ function RecordAudioStream(mySinkPtr) {
 
                 var hr_len2 = capClient.GetNextPacketSize(capClientPtr, packetLength.address());
                 if (ostypes.HELPER.checkHR(hr_len2, 'hr_len2') !== 1) { throw BREAK }
+
+                break; // TODO: debug
             }
+            break; // TODO: debug
         }
 
         // Stop recording.
@@ -172,7 +175,7 @@ function RecordAudioStream(mySinkPtr) {
 		trySafeRelease(mmEnumPtr, 'mmEnum');
 		trySafeRelease(devPtr, 'dev');
 		trySafeRelease(audClientPtr, 'audClient');
-		if (pwfx && !pwfx.isNull()) { ostypes.API.CoTaskMemFree(pwfx) }
+		if (pwfx && !pwfx.isNull()) { ostypes.API('CoTaskMemFree')(pwfx) }
 		trySafeRelease(capClientPtr, 'capClient');
 	}
 }
