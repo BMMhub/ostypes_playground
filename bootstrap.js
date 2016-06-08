@@ -96,14 +96,14 @@ function RecordAudioStream(mySinkPtr) {
 		if (ostypes.HELPER.checkHR(hr_format, 'hr_format') !== 1) { throw BREAK }
         console.log('pwfx:', pwfx.toString());
         console.log('pwfx:', pwfx.contents.toString());
+        console.log('pwfx:', pwfx.contents);
 
 		var hnsRequestedDuration = REFTIMES_PER_SEC;
-		var pwfx = ostypes.TYPE.WAVEFORMATEX.ptr();
 		var hr_init = audClient.Initialize(audClientPtr, ostypes.CONST.AUDCLNT_SHAREMODE_SHARED, 0, hnsRequestedDuration, 0, pwfx, null);
 		if (ostypes.HELPER.checkHR(hr_init, 'hr_init') !== 1) { throw BREAK }
 
 		// Get the size of the allocated buffer.
-		var bufferFrameCount = ostypes.TYPE.UINT32;
+		var bufferFrameCount = ostypes.TYPE.UINT32();
 		var hr_size = audClient.GetBufferSize(audClientPtr, bufferFrameCount.address());
 		if (ostypes.HELPER.checkHR(hr_size, 'hr_size') !== 1) { throw BREAK }
 
@@ -118,7 +118,10 @@ function RecordAudioStream(mySinkPtr) {
 		// if (ostypes.HELPER.checkHR(hr_setform, 'hr_setform') !== 1) { throw BREAK }
 
 		// Calculate the actual duration of the allocated buffer.
-		var hnsActualDuration = parseInt(cutils.jscGetDeepest(bufferFrameCount)) / parseInt(cutils.jscGetDeepest(pwfx.contents.nSamplesPerSec));
+        console.log('bufferFrameCount:', cutils.jscGetDeepest(bufferFrameCount));
+        console.log('nSamplesPerSec:', cutils.jscGetDeepest(pwfx.contents.nSamplesPerSec));
+		var hnsActualDuration = REFTIMES_PER_SEC * parseInt(cutils.jscGetDeepest(bufferFrameCount)) / parseInt(cutils.jscGetDeepest(pwfx.contents.nSamplesPerSec));
+        console.log('hnsActualDuration:', hnsActualDuration);
 
         // Start recording.
         var hr_start = audClient.Start(audClientPtr);
@@ -129,8 +132,9 @@ function RecordAudioStream(mySinkPtr) {
         var data = ostypes.TYPE.BYTE.ptr();
         var flags = ostypes.TYPE.DWORD();
         var numFramesAvailable = ostypes.TYPE.UINT32();
-        while (bDone == FALSE) {
+        while (!bDone) {
             // Sleep for half the buffer duration.
+            console.log('sleep for:', hnsActualDuration / REFTIMES_PER_MILLISEC / 2);
             var rez_sleep = ostypes.API('SleepEx')(hnsActualDuration / REFTIMES_PER_MILLISEC / 2, false);
             console.log('rez_sleep:', rez_sleep);
 
@@ -139,7 +143,7 @@ function RecordAudioStream(mySinkPtr) {
 
             while (parseInt(cutils.jscGetDeepest(packetLength)) !== 0) {
                 // Get the available data in the shared buffer.
-                var hr_getbuf = capClient.GetBufferSize(capClientPtr, data.address(), numFramesAvailable.address(), flags.address(), null, null);
+                var hr_getbuf = capClient.GetBuffer(capClientPtr, data.address(), numFramesAvailable.address(), flags.address(), null, null);
                 if (ostypes.HELPER.checkHR(hr_getbuf, 'hr_getbuf') !== 1) { throw BREAK }
 
                 if (parseInt(cutils.jscGetDeepest(packetLength)) & ostypes.CONST.AUDCLNT_BUFFERFLAGS_SILENT) {
@@ -168,7 +172,7 @@ function RecordAudioStream(mySinkPtr) {
 		trySafeRelease(mmEnumPtr, 'mmEnum');
 		trySafeRelease(devPtr, 'dev');
 		trySafeRelease(audClientPtr, 'audClient');
-		if (pwfx && !pwfx.isNull()) { ostypes.CoTaskMemFree(pwfx) }
+		if (pwfx && !pwfx.isNull()) { ostypes.API.CoTaskMemFree(pwfx) }
 		trySafeRelease(capClientPtr, 'capClient');
 	}
 }
