@@ -180,6 +180,16 @@ function RecordAudioStream(mySinkPtr) {
 	}
 }
 
+function mmioFOURCC(ch0, ch1, ch2, ch3) {
+    // made in accordance with
+        // https://msdn.microsoft.com/en-us/library/windows/desktop/dd375802(v=vs.85).aspx
+        // https://msdn.microsoft.com/en-us/library/windows/desktop/dd757320(v=vs.85).aspx
+
+    var dec = String.charCodeAt(ch0) | (String.charCodeAt(ch1) << 8) | (String.charCodeAt(ch2) << 16) | (String.charCodeAt(ch3) << 24);
+    var hex = dec.toString(16);
+    return '0x' + hex;
+};
+
 function trySafeRelease(ppv, str) {
 	try {
 		ostypes.HELPER.SafeRelease(ppv, str)
