@@ -116,6 +116,36 @@ function RecordAudioStream(mySinkPtr) {
 		// // Notify the audio sink which format to use.
 		// var hr_setform = mySink.SetFormat(mySinkPtr, pwfx);
 		// if (ostypes.HELPER.checkHR(hr_setform, 'hr_setform') !== 1) { throw BREAK }
+        // start - SetFormat proc
+        var m_hFile = ostypes.API('CreateFile')(fn, ostypes.CONST.GENERIC_WRITE, ostypes.CONST.FILE_SHARE_READ, null, ostypes.CONST.CREATE_ALWAYS, ostypes.CONST.FILE_ATTRIBUTE_NORMAL, null);
+        console.log('m_hFile:', m_hFile);
+
+        var CHUNKHEADER = ctypes.StructType('_CHUNKHEADER', [
+            { dwSubchunk1ID: ostypes.TYPE.FOURCC },
+            { dwSubchunk1Size: ostypes.TYPE.DWORD }
+        ]);
+
+        var WAVEHEADER = ctypes.StructType('_WAVEHEADER', [
+            { dwChunkID: ostypes.TYPE.FOURCC },
+            { dwChunkSize: ostypes.TYPE.DWORD },
+            { dwFormat: ostypes.TYPE.FOURCC },
+            { header: CHUNKHEADER },
+        ]);
+
+        var fmt_size = ostypes.WAVEFORMATEX.size + parseInt(cutils.jscGetDeepest(bufferFrameCount)) / parseInt(cutils.jscGetDeepest(pwfx.contents.cbSize));
+        var m_headersize = ostypes.WAVEFORMATEX.size + fmt_size + CHUNKHEADER.size;
+        var m_header = ctypes.char.array(m_headersize)();
+        var m_waveheader = ctypes.cast(m_header, WAVEHEADER.ptr);
+        var FOURCC_RIFF = mmioFOURCC('R', 'I', 'F', 'F');
+        m_waveheader.dwChunkID = FOURCC_RIFF;
+        m_waveheader.dwFormat = mmioFOURCC('W', 'A', 'V', 'E');
+        m_waveheader.header.dwSubchunk1ID = mmioFOURCC('f', 'm' ,'t', ' ');
+        m_waveheader.header.dwSubchunk1Size = fmt_size;
+        var m_fmt = ctypes.cast(m_header.addressOfElement(WAVEHEADER.size), ostypes.TYPE.WAVEFORMATEX.ptr);
+        ostypes.API('memcpy')(m_fmt, pwfx, fmt_size);
+        var m_fmt_char = ctypes.cast(m_fmt, ctypes.char.ptr);
+        var m_dataheader = ctypes.cast()
+        // end - SetFormat proc
 
 		// Calculate the actual duration of the allocated buffer.
         console.log('bufferFrameCount:', cutils.jscGetDeepest(bufferFrameCount));
@@ -140,11 +170,15 @@ function RecordAudioStream(mySinkPtr) {
 
             var hr_len = capClient.GetNextPacketSize(capClientPtr, packetLength.address());
             if (ostypes.HELPER.checkHR(hr_len, 'hr_len') !== 1) { throw BREAK }
-
+            var di = 0;
             while (parseInt(cutils.jscGetDeepest(packetLength)) !== 0) {
+                console.log('packetLength:', parseInt(cutils.jscGetDeepest(packetLength)));
+
                 // Get the available data in the shared buffer.
                 var hr_getbuf = capClient.GetBuffer(capClientPtr, data.address(), numFramesAvailable.address(), flags.address(), null, null);
                 if (ostypes.HELPER.checkHR(hr_getbuf, 'hr_getbuf') !== 1) { throw BREAK }
+
+                console.log('numFramesAvailable:', parseInt(cutils.jscGetDeepest(numFramesAvailable)));
 
                 if (parseInt(cutils.jscGetDeepest(packetLength)) & ostypes.CONST.AUDCLNT_BUFFERFLAGS_SILENT) {
                     data.address().contents = data.constructor(0); // Tell CopyData to write silence.
@@ -154,13 +188,16 @@ function RecordAudioStream(mySinkPtr) {
                 // var hr_copy = mySink.CopyData(mySinkPtr, data, numFramesAvailable, bDone.address());
                 // if (ostypes.HELPER.checkHR(hr_copy, 'hr_copy') !== 1) { throw BREAK }
 
+
                 var hr_relbuf = capClient.ReleaseBuffer(capClientPtr, numFramesAvailable);
                 if (ostypes.HELPER.checkHR(hr_relbuf, 'hr_relbuf') !== 1) { throw BREAK }
 
                 var hr_len2 = capClient.GetNextPacketSize(capClientPtr, packetLength.address());
                 if (ostypes.HELPER.checkHR(hr_len2, 'hr_len2') !== 1) { throw BREAK }
 
-                break; // TODO: debug
+                if (di++ == 20) {
+                    break; // TODO: debug
+                }
             }
             break; // TODO: debug
         }
@@ -177,6 +214,14 @@ function RecordAudioStream(mySinkPtr) {
 		trySafeRelease(audClientPtr, 'audClient');
 		if (pwfx && !pwfx.isNull()) { ostypes.API('CoTaskMemFree')(pwfx) }
 		trySafeRelease(capClientPtr, 'capClient');
+
+        if (m_hFile) {
+            if (!ctypes.Int64.compare(m_hFile.value, ctypes.Int64(ostypes.CONST.INVALID_HANDLE_VALUE))) {
+                var rez_close = ostypes.API('CloseHandle')(m_hFile);
+                console.log('rez_close:', rez_close);
+            }
+            else { console.warn('m_hFile is INVALID_HANDLE_VALUE:', m_hFile, m_hFile.toString()) }
+        }
 	}
 }
 
@@ -186,8 +231,9 @@ function mmioFOURCC(ch0, ch1, ch2, ch3) {
         // https://msdn.microsoft.com/en-us/library/windows/desktop/dd757320(v=vs.85).aspx
 
     var dec = String.charCodeAt(ch0) | (String.charCodeAt(ch1) << 8) | (String.charCodeAt(ch2) << 16) | (String.charCodeAt(ch3) << 24);
-    var hex = dec.toString(16);
-    return '0x' + hex;
+    return dec;
+    // var hex = dec.toString(16);
+    // return '0x' + hex;
 };
 
 function trySafeRelease(ppv, str) {
