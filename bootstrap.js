@@ -91,16 +91,22 @@ function getDefaultBrowserPath() {
                 console.log('app_info:', app_info);
 
                 // var commandline = ostypes.API('g_app_info_get_commandline')(app_info);
-                // console.log('commandline:', commandline, commandline.toString(), commandline.readString()); // commandline: CData { contents: 102 } ctypes.char.ptr(ctypes.UInt64("0x7fcb70bdf340")) firefox %u bootstrap.js:94
-                //
-                // var executable = ostypes.API('g_app_info_get_executable')(app_info);
-                // console.log('executable:', executable, executable.toString(), executable.readString()); // executable: CData { contents: 102 } ctypes.char.ptr(ctypes.UInt64("0x7fcb7c234580")) firefox bootstrap.js:97
+                // console.log('commandline:', commandline, commandline.toString(), commandline.readString());
+                // commandline: CData { contents: 102 } ctypes.char.ptr(ctypes.UInt64("0x7fcb70bdf340")) firefox %u bootstrap.js:94
+                // commandline: CData { contents: 47 } ctypes.char.ptr(ctypes.UInt64("0x7fcb704e29a0")) /home/noi/Desktop/firefox-dev/firefox %u bootstrap.js:94
 
-                var desktop_app_info = ctypes.cast(app_info, ostypes.TYPE.GDesktopAppInfo.ptr);
-                var desktop_filename = ostypes.API('g_desktop_app_info_get_filename')(desktop_app_info);
-                console.log('desktop_filename:', desktop_filename, desktop_filename.toString(), desktop_filename.readString()); // desktop_filename: CData { contents: 47 } ctypes.char.ptr(ctypes.UInt64("0x7fcb704e2640")) /usr/share/applications/firefox.desktop
+                var executable = ostypes.API('g_app_info_get_executable')(app_info);
+                console.log('executable:', executable, executable.toString(), executable.readString());
+                // executable: CData { contents: 102 } ctypes.char.ptr(ctypes.UInt64("0x7fcb7c234580")) firefox bootstrap.js:97
+                // executable: CData { contents: 47 } ctypes.char.ptr(ctypes.UInt64("0x7fcb704e2970")) /home/noi/Desktop/firefox-dev/firefox bootstrap.js:97
 
-                rez = desktop_filename.readString();
+                // var desktop_app_info = ctypes.cast(app_info, ostypes.TYPE.GDesktopAppInfo.ptr);
+                // var desktop_filename = ostypes.API('g_desktop_app_info_get_filename')(desktop_app_info);
+                // console.log('desktop_filename:', desktop_filename, desktop_filename.toString(), desktop_filename.readString());
+                // desktop_filename: CData { contents: 47 } ctypes.char.ptr(ctypes.UInt64("0x7fcb704e2640")) /usr/share/applications/firefox.desktop
+                // desktop_filename: CData { contents: 47 } ctypes.char.ptr(ctypes.UInt64("0x7fcb6bb1f460")) /home/noi/.local/share/applications/userapp-Firefox Developer Edition-ZTYUJY.desktop
+
+                rez = executable.readString();
 
             break;
         case 'darwin':
