@@ -52,6 +52,16 @@ var OSStuff = {};
 function main() {
 	var path = OS.Constants.Path.desktopDir;
     console.log('ok done main');
+
+    var gfile = ostypes.API('g_file_new_for_path')(path);
+    console.log('gfile:', gfile, gfile.toString());
+
+    if (gfile.isNull()) {
+        console.error('failed to create gfile for path:', path);
+        throw new Error('failed to create gfile for path: ' + path);
+    }
+
+    
 }
 
 function unmain() {
