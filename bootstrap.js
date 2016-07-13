@@ -50,21 +50,22 @@ function initOstypes() {
 
 var OSStuff = {};
 function main() {
-		
+	var path = OS.Constants.Path.desktopDir;
+    console.log('ok done main');
 }
 
 function unmain() {
-	
+
 }
 
 function install() {}
 function uninstall() {}
 
 function startup(aData, aReason) {
-	
+
 	initOstypes();
 	main();
-	
+
 }
 
 function shutdown(aData, aReason) {
