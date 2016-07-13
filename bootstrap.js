@@ -61,7 +61,14 @@ function main() {
         throw new Error('failed to create gfile for path: ' + path);
     }
 
-    
+    var mon = ostypes.API('g_file_monitor_directory')(gfile, ostypes.CONST.G_FILE_MONITOR_NONE, null, null);
+    console.log('mon:', mon, mon.toString());
+
+    ostypes.API('g_object_unref')(gfile);
+    if (mon.isNull()) {
+        console.error('failed to create dirwatcher for path:', path);
+        throw new Error('failed to create dirwatcher for path: ' + path);
+    }
 }
 
 function unmain() {
