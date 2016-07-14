@@ -52,7 +52,7 @@ var OSStuff = {};
 function main() {
 
     // https://developer.gnome.org/gio/stable/GFileMonitor.html#g-file-monitor-emit-event
-    var dirwatcher_handler = function(aMonitor, aFile, aOtherFile, aEventType) {
+    var dirwatcher_handler = function(monitor, file, other_file, event_type, user_data) {
         /* https://developer.gnome.org/gio/stable/GFileMonitor.html#GFileMonitor-changed
          * Emitted when file has been changed.
          * If using G_FILE_MONITOR_WATCH_RENAMES on a directory monitor, and the information is available (and if supported by the backend), event_type may be G_FILE_MONITOR_EVENT_RENAMED, G_FILE_MONITOR_EVENT_MOVED_IN or G_FILE_MONITOR_EVENT_MOVED_OUT.
@@ -61,7 +61,7 @@ function main() {
          * If using the deprecated flag G_FILE_MONITOR_SEND_MOVED flag and event_type is G_FILE_MONITOR_EVENT_MOVED, file will be set to a GFile containing the old path, and other_file will be set to a GFile containing the new path.
          * In all the other cases, other_file will be set to NULL.
         */
-        console.log('in dirwatcher_handler', 'aMonitor:', aMonitor, 'aFile:', aFile, 'aOtherFile:', aOtherFile, 'aEventType:', aEventType);
+        console.log('in dirwatcher_handler', 'monitor:', monitor, 'file:', file, 'other_file:', other_file, 'event_type:', event_type, 'user_data:', user_data);
     };
 
     OSStuff.dirwatcher_handler_c = ostypes.TYPE.GFileMonitor_changed_signal(dirwatcher_handler);
@@ -77,7 +77,7 @@ function main() {
         throw new Error('failed to create gfile for path: ' + path);
     }
 
-    var mon = ostypes.API('g_file_monitor_directory')(gfile, ostypes.CONST.G_FILE_MONITOR_NONE, null, null);
+    var mon = ostypes.API('g_file_monitor_directory')(gfile, ostypes.CONST.G_FILE_MONITOR_WATCH_MOVES, null, null);
     console.log('mon:', mon, mon.toString());
 
     ostypes.API('g_object_unref')(gfile);
