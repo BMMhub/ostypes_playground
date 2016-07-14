@@ -51,13 +51,20 @@ function initOstypes() {
 var OSStuff = {};
 function main() {
 
-    // OSStuff.dirwatcher_handler = function(aMonitor, aFile, aOtherFile, aEventType) {
-    OSStuff.dirwatcher_handler = function(aMonitor, aFile, aOtherFile, aEventType) {
-        // console.log('in dirwatcher_handler', 'aMonitor:', aMonitor, 'aFile:', aFile, 'aOtherFile:', aOtherFile, 'aEventType:', aEventType);
-
+    // https://developer.gnome.org/gio/stable/GFileMonitor.html#g-file-monitor-emit-event
+    var dirwatcher_handler = function(aMonitor, aFile, aOtherFile, aEventType) {
+        /* https://developer.gnome.org/gio/stable/GFileMonitor.html#GFileMonitor-changed
+         * Emitted when file has been changed.
+         * If using G_FILE_MONITOR_WATCH_RENAMES on a directory monitor, and the information is available (and if supported by the backend), event_type may be G_FILE_MONITOR_EVENT_RENAMED, G_FILE_MONITOR_EVENT_MOVED_IN or G_FILE_MONITOR_EVENT_MOVED_OUT.
+         * In all cases file will be a child of the monitored directory. For renames, file will be the old name and other_file is the new name. For "moved in" events, file is the name of the file that appeared and other_file is the old name that it was moved from (in another directory). For "moved out" events, file is the name of the file that used to be in this directory and other_file is the name of the file at its new location.
+         * It makes sense to treat G_FILE_MONITOR_EVENT_MOVED_IN as equivalent to G_FILE_MONITOR_EVENT_CREATED and G_FILE_MONITOR_EVENT_MOVED_OUT as equivalent to G_FILE_MONITOR_EVENT_DELETED, with extra information. G_FILE_MONITOR_EVENT_RENAMED is equivalent to a delete/create pair. This is exactly how the events will be reported in the case that the G_FILE_MONITOR_WATCH_RENAMES flag is not in use.
+         * If using the deprecated flag G_FILE_MONITOR_SEND_MOVED flag and event_type is G_FILE_MONITOR_EVENT_MOVED, file will be set to a GFile containing the old path, and other_file will be set to a GFile containing the new path.
+         * In all the other cases, other_file will be set to NULL.
+        */
+        console.log('in dirwatcher_handler', 'aMonitor:', aMonitor, 'aFile:', aFile, 'aOtherFile:', aOtherFile, 'aEventType:', aEventType);
     };
 
-    OSStuff.dirwatcher_handler_c = ctypes.FunctionType(ostypes.TYPE.CALLBACK_ABI, ostypes.TYPE.gpointer, [ostypes.TYPE.gpointer, ostypes.TYPE.gpointer, ostypes.TYPE.gpointer, ostypes.TYPE.GFileMonitorFlags]).ptr(OSStuff.dirwatcher_handler);
+    OSStuff.dirwatcher_handler_c = ostypes.TYPE.GFileMonitor_changed_signal(dirwatcher_handler);
 
 	var path = OS.Constants.Path.desktopDir;
     console.log('ok done main');
@@ -81,7 +88,7 @@ function main() {
 
     // var id = ostypes.API('g_signal_connect_data')(mon, 'dirwatcher::triggered', OSStuff.dirwatcher_handler_c, null, null, ostypes.CONST.G_CONNECT_AFTER);
     var id = ostypes.API('g_signal_connect_data')(mon, 'changed', OSStuff.dirwatcher_handler_c, null, null, ostypes.CONST.G_CONNECT_AFTER);
-    console.log('id:', id);
+    console.log('id:', id, id.toString());
 }
 
 function unmain() {
