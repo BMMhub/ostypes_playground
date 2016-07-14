@@ -87,8 +87,16 @@ function main() {
     }
 
     // var id = ostypes.API('g_signal_connect_data')(mon, 'dirwatcher::triggered', OSStuff.dirwatcher_handler_c, null, null, ostypes.CONST.G_CONNECT_AFTER);
-    var id = ostypes.API('g_signal_connect_data')(mon, 'changed', OSStuff.dirwatcher_handler_c, null, null, ostypes.CONST.G_CONNECT_AFTER);
+    var id = ostypes.API('g_signal_connect_data')(mon, 'changed', OSStuff.dirwatcher_handler_c, null, null, 0);
     console.log('id:', id, id.toString());
+
+    xpcomSetTimeout(null, 20000, function() {
+        console.log('stopping dirwatcher');
+        ostypes.API('g_signal_handler_disconnect')(mon, id);
+        ostypes.API('g_object_unref')(mon);
+
+        console.log('dirwatcher stopped');
+    });
 }
 
 function unmain() {
@@ -112,11 +120,25 @@ function shutdown(aData, aReason) {
 }
 
 // start - common helper functions
+var gTempTimers = {}; // hold temporary timers, when first arg is not set for xpcomSetTimeout
 function xpcomSetTimeout(aNsiTimer, aDelayTimerMS, aTimerCallback) {
-	aNsiTimer.initWithCallback({
+    var timer;
+    if (!aNsiTimer) {
+        var timerid = Date.now();
+        gTempTimers[timerid] = Cc['@mozilla.org/timer;1'].createInstance(Ci.nsITimer);
+        timer = gTempTimers[timerid];
+    } else {
+        timer = aNsiTimer;
+    }
+
+	timer.initWithCallback({
 		notify: function() {
 			aTimerCallback();
+            if (!aNsiTimer) {
+                delete gTempTimers[timerid];
+            }
 		}
 	}, aDelayTimerMS, Ci.nsITimer.TYPE_ONE_SHOT);
 }
+
 // end - common helper functions
