@@ -50,6 +50,15 @@ function initOstypes() {
 
 var OSStuff = {};
 function main() {
+
+    // OSStuff.dirwatcher_handler = function(aMonitor, aFile, aOtherFile, aEventType) {
+    OSStuff.dirwatcher_handler = function(aMonitor, aFile, aOtherFile, aEventType) {
+        // console.log('in dirwatcher_handler', 'aMonitor:', aMonitor, 'aFile:', aFile, 'aOtherFile:', aOtherFile, 'aEventType:', aEventType);
+
+    };
+
+    OSStuff.dirwatcher_handler_c = ctypes.FunctionType(ostypes.TYPE.CALLBACK_ABI, ostypes.TYPE.gpointer, [ostypes.TYPE.gpointer, ostypes.TYPE.gpointer, ostypes.TYPE.gpointer, ostypes.TYPE.GFileMonitorFlags]).ptr(OSStuff.dirwatcher_handler);
+
 	var path = OS.Constants.Path.desktopDir;
     console.log('ok done main');
 
@@ -69,6 +78,10 @@ function main() {
         console.error('failed to create dirwatcher for path:', path);
         throw new Error('failed to create dirwatcher for path: ' + path);
     }
+
+    // var id = ostypes.API('g_signal_connect_data')(mon, 'dirwatcher::triggered', OSStuff.dirwatcher_handler_c, null, null, ostypes.CONST.G_CONNECT_AFTER);
+    var id = ostypes.API('g_signal_connect_data')(mon, 'changed', OSStuff.dirwatcher_handler_c, null, null, ostypes.CONST.G_CONNECT_AFTER);
+    console.log('id:', id);
 }
 
 function unmain() {
