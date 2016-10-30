@@ -122,7 +122,7 @@ function getMouseInfo(aOptions={}) {
 
 	if (GTK_VERSION < 3) {
 		// use GTK2 method
-		var gdkwinptr_undermouse = ostypes.API('gdk_window_get_pointer')(ostypes.API('gdk_get_default_root_window')(), x.address(), y.address(), masks.address());
+		var gdkwinptr_undermouse = ostypes.API('gdk_window_get_pointer')(ostypes.API('gdk_get_default_root_window')(), x.address(), y.address(), aOptions.mods ? masks.address() : null);
 	} else {
 		// use GTK3 method
 		var dispptr = ostypes.API('gdk_display_get_default')();
