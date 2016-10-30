@@ -53,9 +53,7 @@ function main() {
 		var win = Services.ww.openWindow(null, 'data:text/html,rawr<style>* { background-color: transparent }</style>', null, 'width=300,height=300', null);
 
 		win.addEventListener('mousedown', function(e) {
-			if (e.button !== 0) return; // drag can only be initated by primary mouse button
-
-			const GDK_BUTTON_PRIMARY = 1; // im not sure about this, it might be specifically "LEFT" button, and not "Primary" as it is in javascript
+			// if (e.button !== 0) return; // drag can only be initated by primary mouse button
 
 			// https://dxr.mozilla.org/mozilla-central/source/widget/gtk/nsWindow.cpp#6638
 			var gdkwinptr = ostypes.TYPE.GdkWindow.ptr(ctypes.UInt64(_getNativeHandlePtrStr(win)));
@@ -66,12 +64,17 @@ function main() {
 			var toplevel = ostypes.API('gdk_window_get_toplevel')(gdkwinptr);
 			console.log('pointers same?', cutils.comparePointers(toplevel, gdkwinptr), cutils.jscEqual(toplevel, gdkwinptr), cutils.jscGetDeepest(toplevel), cutils.jscGetDeepest(gdkwinptr));
 
-			var coordmouse = getMouseCoords()
-			console.log('coordmouse:', coordmouse);
-			var coordwin = getWindowCoords(gdkwinptr);
-			console.log('coordwin:', coordwin);
+			var mouse = getMouseInfo({mods:true});
+			console.log('mouse:', mouse);
 
-			ostypes.API('gdk_window_begin_move_drag')(gdkwinptr, GDK_BUTTON_PRIMARY, coordmouse.x, coordmouse.y, ostypes.CONST.GDK_CURRENT_TIME);
+			var btnnum;
+			for (var a_maskname in mouse) {
+				if (a_maskname.startsWith('BUTTON')) {
+					btnnum = parseInt(a_maskname.substr('BUTTON'.length));
+				}
+			}
+
+			ostypes.API('gdk_window_begin_move_drag')(gdkwinptr, btnnum, mouse.x, mouse.y, ostypes.CONST.GDK_CURRENT_TIME);
 		}, false);
 
 	/*
@@ -102,18 +105,24 @@ function pressHandler(widgetPtr, eventPtr, user_data) {
 	return false; //  TRUE to stop other handlers from being invoked for the event. FALSE to propagate the event further.
 }
 
-function getMouseCoords() {
+function getMouseInfo(aOptions={}) {
+	// by default it just returns x, y of mousedown
+	const OPTIONS_DEFAULT = {
+		mods: false
+	};
+
+	// GDK
+	const MASKNAME = ['SHIFT', 'LOCK', 'CONTROL', 'MOD1', 'MOD2', 'MOD3', 'MOD4', 'MOD5', 'BUTTON1', 'BUTTON2', 'BUTTON3', 'BUTTON4', 'BUTTON5', 'SUPER', 'HYPER', 'META', 'RELEASE', 'MODIFIER'];
+
+	aOptions = Object.assign(OPTIONS_DEFAULT, aOptions);
+
+	var x = ostypes.TYPE.gint();
+	var y = ostypes.TYPE.gint();
+	var masks = aOptions.mods ? ostypes.TYPE.GdkModifierType() : null;
+
 	if (GTK_VERSION < 3) {
 		// use GTK2 method
-		var x = ostypes.TYPE.gint();
-		var y = ostypes.TYPE.gint();
-
-		var gdkwinptr_undermouse = ostypes.API('gdk_window_get_pointer')(ostypes.API('gdk_get_default_root_window')(), x.address(), y.address(), null);
-
-		return {
-			x: parseInt(cutils.jscGetDeepest(x)),
-			y: parseInt(cutils.jscGetDeepest(y)),
-		};
+		var gdkwinptr_undermouse = ostypes.API('gdk_window_get_pointer')(ostypes.API('gdk_get_default_root_window')(), x.address(), y.address(), masks.address());
 	} else {
 		// use GTK3 method
 		var dispptr = ostypes.API('gdk_display_get_default')();
@@ -131,17 +140,31 @@ function getMouseCoords() {
 			// use GTK3.2
 			var seatmgr = ostypes.API('gdk_display_get_default_seat')(dispptr);
 			pointer_device_ptr = ostypes.API('gdk_seat_get_pointer')(seatmgr);
+
+
 		}
 
-		var x = ostypes.TYPE.gint();
-		var y = ostypes.TYPE.gint();
 		ostypes.API('gdk_device_get_position')(pointer_device_ptr, null, x.address(), y.address());
 
-		return {
-			x: parseInt(cutils.jscGetDeepest(x)),
-			y: parseInt(cutils.jscGetDeepest(y)),
-		};
+		if (aOptions.mods) ostypes.API('gdk_device_get_state')(pointer_device_ptr, ostypes.API('gdk_get_default_root_window')(), null, masks.address());
 	}
+
+	var rez = {
+		x: parseInt(cutils.jscGetDeepest(x)),
+		y: parseInt(cutils.jscGetDeepest(y)),
+	};
+
+	if (aOptions.mods) {
+		console.log('masks:', masks, cutils.jscGetDeepest(masks), uneval(masks))
+		masks = parseInt(cutils.jscGetDeepest(masks)); // im thinking the largest masks can be is less < 53bit, so i can safely parseInt it. if it is bigger then 53bit, then i should just jscGetDeepest and then use ctypes_math.UInt64.and below. so im assuming this is less then Number.MAX_SAFE_INTEGER
+		for (var a_maskname of MASKNAME) {
+			// if (ctypes_math.UInt64.and(masks, ostypes.CONST['GDK_' + a_maskname + '_MASK'])) {
+			if (masks & ostypes.CONST['GDK_' + a_maskname + '_MASK']) {
+				rez[a_maskname] = true;
+			}
+		}
+	}
+	return rez;
 }
 
 function getWindowCoords(aGdkWinPtr) {
